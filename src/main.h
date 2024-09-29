@@ -28,3 +28,17 @@
 #define PORT "5678"
 
 #define BACKLOG 10
+
+// bignum
+
+typedef struct bignum {
+    unsigned int   size;   // number of bytes in data
+    unsigned char* data;   // actual number
+    unsigned char  sign;   // sign (0 means pos, otherwise neg)
+
+    
+} *bignum_t;
+
+// bignum functions
+bignum_t b_sub(bignum_t a, bignum_t b);
+bignum_t b_add(bignum_t a, bignum_t b);

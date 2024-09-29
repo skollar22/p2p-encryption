@@ -1,40 +1,12 @@
 #include "main.h"
 
-// #include <stdio.h>
-// #include <stdlib.h>
-// #include <string.h>
-
-// // misc posix stuff
-// #include <unistd.h>
-
-// // error handling
-// #include <errno.h>
-
-// // types library
-// #include <sys/types.h>
-
-// // sockets library
-// #include <sys/socket.h>
-
-// // net library??
-// #include <netdb.h>
-
-// #include <arpa/inet.h>
-
-// #include <netinet/in.h>
-
-// #include <sys/wait.h>
-
-// #include <signal.h>
-
-
 
 int main(int argc, char** argv) {
 
     // variables for getting address info
     struct addrinfo hints, *servinfo, *p;
-    int status;
-    char ipstr[INET6_ADDRSTRLEN];
+    int status;                                 // for printing errors
+    char ipstr[INET6_ADDRSTRLEN];               // unused?
 
     // socket variables
     int sockfd;
@@ -45,11 +17,13 @@ int main(int argc, char** argv) {
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_flags = AI_PASSIVE;
 
+    // get address info (for current address, and #define'd port)
     if ((status = getaddrinfo(NULL, PORT, &hints, &servinfo)) != 0) {
         fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(status));
         return 1;
     }
 
+    // find a socket we can use from the address list
     for (p = servinfo; p != NULL; p = p->ai_next) {
         // get the socket and error check
         if ((sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1) {
@@ -73,12 +47,15 @@ int main(int argc, char** argv) {
         break;
     }
 
+    // free the list of addresses, since we have a bound socket now
     freeaddrinfo(servinfo);
 
+    // actually check if we have a bound socket now
     if (p == NULL) {
         fprintf(stderr, "server: failed to bind\n");
     }
 
+    // listen on the socket we have
     if (listen(sockfd, BACKLOG) == -1) {
         perror("listen");
         exit(1);
@@ -86,10 +63,12 @@ int main(int argc, char** argv) {
 
     printf("waiting for connections...\n");
 
+    // temporary, for testing
     while(getchar() != EOF) {
-        
+
     }
 
+    // close the socket since we are exiting
     close(sockfd);
 
     return 0;
