@@ -25,3 +25,6 @@
 
 #include <signal.h>
 
+#define PORT "5678"
+
+#define BACKLOG 10

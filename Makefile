@@ -29,8 +29,6 @@ OBJECTS     := $(SOURCES:$(BASE_PATH)/%.c=$(BASE_PATH)/$(BUILDDIR)/%.o)
 HEADERS 	:= $(shell find $(BASE_PATH) -name '*.h')
 
 all: directories $(OBJECTS) compile
-# @mkdir -p build
-# $(CC) $(DEBUG) $(OBJECTS) $(LINKER_FLAGS) -o $(BUILDDIR)/$(TARGET)
 
 $(BASE_PATH)/$(BUILDDIR)/%.o: $(BASE_PATH)/%.c $(HEADERS)
 	$(CC) -c $(DEBUG) -I $(BASE_PATH) $(COMPILER_FLAGS) $< -o $@
