@@ -43,3 +43,5 @@ typedef struct bignum {
 bignum_t b_sub(bignum_t a, bignum_t b);
 bignum_t b_add(bignum_t a, bignum_t b);
 void b_print(bignum_t a);
+bignum_t b_trim(bignum_t a);
+int b_comp(bignum_t a, bignum_t b);
