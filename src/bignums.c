@@ -102,7 +102,12 @@ bignum_t b_copy(bignum_t a) {
     res->sign = a->sign;
 }
 
+/**
+ * trims leading 0 bytes in place
+ */
 bignum_t b_trim(bignum_t a) {
+
+
     int i;
     for (i = a->size - 1; i > 0; i--) {
         if (a->data[i]) break;
@@ -113,6 +118,7 @@ bignum_t b_trim(bignum_t a) {
         fprintf(stderr, "Error reallocating bignum size!\n");
         exit(0);
     }
+
 
     a->data = temp;
     a->size = i + 1;
@@ -134,6 +140,13 @@ bignum_t b_pad(bignum_t a, unsigned int size) {
     a->data = temp;
     a->size = size;
     return a;
+}
+
+/**
+ * Or Immediate In Place
+ */
+void b_oriip(bignum_t a, unsigned char val) {
+    a->data[0] |= val;
 }
 
 bignum_t b_add(bignum_t a, bignum_t b) {
@@ -311,29 +324,142 @@ bignum_t b_lshift(bignum_t a, unsigned int shift) {
     return res;
 }
 
+/**
+ * Left Shift In Place
+ */
+void b_lsip(bignum_t a, unsigned int shift) {
+    bignum_t res = b_lshift(a, shift);
+    b_free(a);
+    a = res;
+}
+
+
+// not complete
+bignum_t b_rshift(bignum_t a, unsigned int shift) {
+    bignum_t res = b_init(b_bytes(a));
+
+    unsigned int bitshift = shift % 8;
+    unsigned int byteshift = shift / 8;
+    unsigned char mask = 0xFF >> (8 - bitshift);
+
+    for (int i = 0; i < a->size; i++) {
+
+
+        if (i - byteshift < 0) {
+            continue;
+        }
+
+        unsigned char lower = (a->data[i] & mask) << (8 - bitshift);
+        unsigned char upper = (a->data[i] & (~mask)) >> (bitshift);
+
+
+        // note to self - negating an unsigned does not make it signed again ;(
+        if (0 <= (int)(i - byteshift - 1)) {
+            res->data[i - byteshift - 1] |= lower;
+        }
+        if (0 <= (int)(i - byteshift)) {
+            res->data[i - byteshift] |= upper;
+        }
+    }
+
+    b_trim(res);
+
+    return res;
+}
+
+/**
+ * Right Shift In Place
+ */
+void b_rsip(bignum_t a, unsigned int shift) {
+    bignum_t res = b_rshift(a, shift);
+    b_free(a);
+    a = res;
+}
+
 bignum_t b_mul(bignum_t a, bignum_t b) {
     // gets the smallest and largest numbers
     bignum_t smallest = b_smallest(a, b);
+    smallest = b_copy(smallest);
+    smallest->sign = 0;
     bignum_t largest = b_largest(a, b);
+    largest = b_copy(largest);
+    largest->sign = 0;
 
+    // TODO fix pls
     if (smallest == largest) {
         smallest = (smallest == a) ? b : a;
     }
 
     bignum_t res = b_init((b_bytes(a) + b_bytes(b)));
+    res->sign = a->sign ^ b->sign;
 
     for (int i = 0; i < smallest->size; i++) {
         for (int j = 0; j < 8; j++) {
             if (smallest->data[i] & (1 << j)) {
                 // need to add the shift
-                res = b_add(res, b_lshift(largest, i * 8 + j));
+                bignum_t temp = b_lshift(largest, i * 8 + j);
+                res = b_add(res, temp);
+                b_free(temp);
             }
         }
     }
 
+    b_free(smallest);
+    b_free(largest);
+
     res = b_trim(res);
 
     return res;
+}
+
+/**
+ * n - numerator
+ * d - denominator
+ * r - remainder (mod) - this will be overwritten
+ * 
+ * @returns q, the quotient of the division
+ */
+bignum_t b_div(bignum_t n, bignum_t d, bignum_t r) {
+    b_trim(n);
+    b_trim(d);
+
+    if (r != NULL) b_free(r);
+
+    bignum_t q = b_init(b_bytes(n));
+
+    q->sign = n->sign ^ d->sign;
+
+    int shift = b_bytes(n) - b_bytes(d);
+    if (shift < 0) return q; // if the denom is bigger, doesn't divide into
+
+    // try align bytes in the copies
+    bignum_t ds = b_lshift(d, shift); ds->sign = 0;
+    bignum_t ns = b_copy(n); ns->sign = 0;
+
+    shift *= 8; // convert to bits shifted
+
+    while(b_largest(ns, ds) == ns) {
+        b_lsip(ds, 1);
+        shift++;
+    }
+    // we now know ds > ns, so shift back one place
+    b_rsip(ds, 1); shift--;
+
+    bignum_t t;
+    for (int i = 0; i < shift; i++) {
+        if (b_largest(ns, ds) == ns) {
+            t = b_sub(ns, ds);
+            b_free(ns);
+            ns = t;
+            b_oriip(q, 1);
+        }
+        b_rsip(ds, 1);
+        b_lsip(q, 1);
+    }
+
+    r = ns;
+
+    return q;
 }
 
 void b_print(bignum_t a) {
@@ -348,20 +474,62 @@ void b_print(bignum_t a) {
 }
 
 int main(int argc, char** argv) {
-    if (argc != 3) {
-        fprintf(stderr, "usage: ./test <num1> <num2>");
+    if (argc != 4) {
+        fprintf(stderr, "usage: ./test <num1> <op> <num2>");
         exit(1);
     }
 
     int a = atoi(argv[1]);
-    int b = atoi(argv[2]);
-
-    printf("inputted: %d %d\n", a, b);
-    printf("hex: 0x%04X 0x%04X\n", a, b);
+    int b = atoi(argv[3]);
 
     bignum_t b_a = b_initv(a); b_a = b_trim(b_a);
     bignum_t b_b = b_initv(b); b_b = b_trim(b_b);
 
-    printf("ints: %d\n", a + b);
-    b_print(b_add(b_a, b_b));
+    printf("Initial inputs as bignum:\nA:\n");
+    b_print(b_a);
+    printf("B:\n");
+    b_print(b_b);
+
+    int res;
+    bignum_t b_res;
+    bignum_t b_res_2;
+
+    printf("inputted: %d %d\n", a, b);
+    printf("hex: 0x%04X 0x%04X\n\n", a, b);
+
+    printf("recieved %s\n", argv[2]);
+
+    if (strcmp(argv[2], "ls") == 0) {
+        printf("left shifting...\n\n");
+
+        res = a << b;
+        b_res = b_lshift(b_a, b);
+    } else if (strcmp(argv[2], "rs") == 0) {
+        printf("right shifting...\n\n");
+
+        res = a >> b;
+        b_res = b_rshift(b_a, b);
+    } else if (strcmp(argv[2], "mul") == 0) {
+        printf("multiplying...\n\n");
+
+        res = a * b;
+        b_res = b_mul(b_a, b_b);
+    } else if (strcmp(argv[2], "div") == 0) {
+        printf("dividing...\n\n");
+
+        res = a / b;
+        b_res = b_div(b_a, b_b, b_res_2);
+
+        printf("ints mod: %d\n", a % b);
+        printf("bignum mod: \n");
+        b_print(b_res_2);
+        printf("\n\nquotient:\n");
+    }
+    else {
+        printf("Invalid operation!\n");
+        return 1;
+    }
+
+    printf("ints: %d (0x%04X)\n", res, res);
+    b_print(b_res);
 }
