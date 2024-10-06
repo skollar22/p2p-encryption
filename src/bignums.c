@@ -46,22 +46,17 @@ unsigned int b_largest_bytes(bignum_t a, bignum_t b) {
  * @returns 1 if the first is bigger, -1 if the second is bigger, 0 if equal
  */
 int b_comp(bignum_t a, bignum_t b) {
-    printf("\nComparing ns and ds...\n");
     b_trim(a);
     b_trim(b);
     if (b_bytes(a) != b_bytes(b)) return (b_bytes(a) > b_bytes(b)) ? 1 : -1;
-    printf("same bytes num\n");
     // same number of bytes
     // compate byte by byte until we get to a different one
     for (int i = a->size - 1; i >= 0; i--) {
-        printf("looking at byte no. %d: a = 0x%02X, b = 0x%02X... ", i, a->data[i], b->data[i]);
 
         if (a->data[i] == b->data[i]) {
-            printf("same, continuing...\n");
             continue;
         }
         int temp = (a->data[i] > b->data[i]) ? 1 : -1;
-        printf("%d\n", temp);
         return temp;
     }
     // all bytes are the same
@@ -163,7 +158,18 @@ bignum_t b_pad(bignum_t a, unsigned int size) {
  * Or Immediate In Place
  */
 void b_oriip(bignum_t a, unsigned char val) {
-    a->data[0] |= val;
+    if (a->size >= 1) a->data[0] |= val;
+}
+
+/**
+ * And Immediate
+ */
+unsigned char b_andi(bignum_t a, unsigned char val) {
+    if (a->size >= 1) {
+        unsigned int temp = (a->data[0] & val);
+        return temp;
+    }
+    return 0;
 }
 
 bignum_t b_add(bignum_t a, bignum_t b) {
@@ -322,7 +328,7 @@ bignum_t b_lshift(bignum_t a, unsigned int shift) {
     unsigned int bitsnum = a->size * 8 + shift;
     unsigned int bytesnum = bitsnum / 8 + 1;
 
-    bignum_t res = b_init(bytesnum);
+    bignum_t res = b_init(bytesnum); res->sign = a->sign;
 
     for (int i = 0; i < a->size; i++) {
         unsigned int bitshift = (shift % 8);
@@ -351,9 +357,8 @@ void b_lsip(bignum_t *a, unsigned int shift) {
 }
 
 
-// not complete
 bignum_t b_rshift(bignum_t a, unsigned int shift) {
-    bignum_t res = b_init(b_bytes(a));
+    bignum_t res = b_init(b_bytes(a)); res->sign = a->sign;
 
     unsigned int bitshift = shift % 8;
     unsigned int byteshift = shift / 8;
@@ -450,55 +455,35 @@ bignum_t b_div(bignum_t n, bignum_t d, bignum_t *r) {
 
     q->sign = n->sign ^ d->sign;
 
-    int shift = b_bytes(n) - b_bytes(d);
+    int shift = b_bytes(n) - b_bytes(d) + 1; // in bytes
 
-    printf("Inside div fn: shift = %d\n", shift);
+    if (shift < 1) return q; // if the denom is bigger, doesn't divide into
 
-    if (shift < 0) return q; // if the denom is bigger, doesn't divide into
+    shift *= 8; // convert to bits shifted
 
     // try align bytes in the copies
     bignum_t ds = b_lshift(d, shift); ds->sign = 0;
     bignum_t ns = b_copy(n); ns->sign = 0;
 
-    printf("Printing ds...\n");
-    b_print(ds);
-    printf("\nPrinting ns...\n");
-    b_print(ns);
-    printf("\n");
 
-    shift *= 8; // convert to bits shifted
-
-    printf("multiplied shift: %d\n", shift);
-
-    while(b_comp(ns, ds) > 0) {
-        b_lsip(&ds, 1);
-        shift++;
-        printf("incrementing shift... %d\n", shift);
-        b_print(ds);
+    // we currently know that ds is bigger
+    // want to make it smaller or equal
+    while(b_comp(ns, ds) <= 0) {
+        b_rsip(&ds, 1);
+        shift--;
     }
 
-    printf("Shift in bits: %d\n", shift);
-    // we now know ds > ns, so shift back one place
-    b_rsip(&ds, 1);
+    // need one extra shift for some reason
+    shift++;
 
-    printf("going back one... shift = %d\n", shift);
-    b_print(ds);
 
     bignum_t t;
     for (int i = 0; i < shift; i++) {
-        printf("\n\niteration number %d\nPrinting ns...\n", i);
-        b_print(ns);
-        printf("Printing ds\n");
-        b_print(ds);
         if (b_comp(ns, ds) >= 0) {
-            printf("numerator is larger\n");
             t = b_sub(ns, ds);
             b_free(ns);
             ns = t;
             b_oriip(q, 1);
-
-            printf("new numerator is:\n");
-            b_print(ns);
         }
         b_rsip(&ds, 1);
         b_lsip(&q, 1);
@@ -512,16 +497,99 @@ bignum_t b_div(bignum_t n, bignum_t d, bignum_t *r) {
     return q;
 }
 
+/**
+ * Exponent function
+ * @param b - base
+ * @param e - exponent
+ * @returns b^(e)
+ */
+bignum_t b_exp(bignum_t b, bignum_t e) {
+    bignum_t zero = b_init(1);
+    bignum_t base = b_copy(b); base->sign = 0;
+    bignum_t exp = b_copy(e); exp->sign = 0;
+
+    // set our result to 1
+    bignum_t res = b_init(1);
+    b_oriip(res, 1);
+
+    int i = 0;
+    while(b_comp(exp, zero) >= 1) {
+        if (b_andi(exp, 1)) {
+            bignum_t temp = res;
+            res = b_mul(res, base);
+            b_free(temp);
+        }
+
+        bignum_t temp = base;
+        base = b_mul(base, base);
+        b_free(temp);
+
+        i++;
+
+        b_rsip(&exp, 1);
+    }
+
+    if (b->sign) res->sign = (b_andi(e, 1)) ? 1 : 0;
+
+    return res;
+}
+
+int b_toi(bignum_t a) {
+    if (a->size > 4) return (a->sign == 0) ? __INT32_MAX__ : -__INT32_MAX__;
+
+    int total = 0;
+
+    for (int i = 0; i < a->size; i++) {
+        total += a->data[i] * pow(2, 8*i);
+    }
+
+    return total;
+}
+
 void b_print(bignum_t a) {
     unsigned int total = 0;
     printf("printing bignum...\n");
     for (int i = 0; i < a->size; i++) {
         total += a->data[i] * pow(2, 8*i);
         printf("%d: 0x%02X\n", i, a->data[i]);
-        if (i > 10) exit(1);
     }
 
     printf("bignum: %s%u\n", ((a->sign == 0) ? "+" : "-"), total);
+
+
+    
+
+}
+
+char* b_tostr(bignum_t a) {
+    bignum_t n = b_copy(a);
+    bignum_t ten = b_initv(10);
+    bignum_t rem;
+    bignum_t zero = b_init(1);
+    int len = 0;
+
+    while (b_comp(n, zero) >= 1) {
+        len++;
+        bignum_t temp = n;
+        n = b_div(n, ten, &rem);
+        b_free(rem);
+        b_free(temp);
+    }
+
+    b_free(n);
+    n = b_copy(a);
+
+    char *str = malloc(sizeof(char) * (len + 1));
+
+    for (int i = 0; i < len; i++) {
+        bignum_t temp = n;
+        n = b_div(n, ten, &rem);
+        b_free(temp);
+        str[len - 1 - i] = b_toi(rem) + '0';
+    }
+    str[len] = '\0';
+
+    return str;
 }
 
 int main(int argc, char** argv) {
@@ -572,10 +640,15 @@ int main(int argc, char** argv) {
         res = a / b;
         b_res = b_div(b_a, b_b, &b_res_2);
 
-        printf("ints mod: %d\n", a % b);
-        printf("bignum mod: \n");
+        printf("\nmodulus:\n");
+        printf("ints: %d\n", a % b);
         b_print(b_res_2);
         printf("\n\nquotient:\n");
+    } else if (strcmp(argv[2], "exp") == 0) {
+        printf("exponentiating...\n\n");
+
+        res = pow(a, b);
+        b_res = b_exp(b_a, b_b);
     }
     else {
         printf("Invalid operation!\n");
@@ -584,4 +657,6 @@ int main(int argc, char** argv) {
 
     printf("ints: %d (0x%04X)\n", res, res);
     b_print(b_res);
+    printf("bignum: %s\n", b_tostr(b_res));
+
 }

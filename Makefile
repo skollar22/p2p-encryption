@@ -12,6 +12,9 @@ RESDIR      := res
 SRCEXT      := c
 OBJEXT      := o
 
+LINKER_FLAGS := -lm
+COMPILER_FLAGS := 
+
 #Flags, Libraries and Includes
 CFLAGS      := -fopenmp -Wall -O3 -g
 LIB         := -fopenmp -lm -larmadillo
