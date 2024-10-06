@@ -350,10 +350,45 @@ bignum_t b_lshift(bignum_t a, unsigned int shift) {
 /**
  * Left Shift In Place
  */
-void b_lsip(bignum_t *a, unsigned int shift) {
-    bignum_t res = b_lshift((*a), shift);
-    b_free((*a));
-    *a = res;
+void b_lsip(bignum_t a, unsigned int shift) {
+    // bignum_t res = b_lshift((*a), shift);
+    // b_free((*a));
+    // *a = res;
+    unsigned int oldSize = a->size;
+    unsigned int bitsnum = a->size * 8 + shift;
+    unsigned int bytesnum = bitsnum / 8 + 1;
+    unsigned int bitshift = (shift % 8);
+    unsigned int byteshift = shift / 8; // truncated we hope
+
+    // bignum_t res = b_init(bytesnum); res->sign = a->sign;
+
+    b_pad(a, bytesnum);
+
+    unsigned char temp = 0;
+
+    for (int i = oldSize - 1; i >= 0; i--) {
+        unsigned char mask = 0xFF >> bitshift;
+        unsigned char lower = (a->data[i] & mask) << bitshift;
+        mask = ~mask;
+        unsigned char upper = (a->data[i] & mask) >>(8 - bitshift);
+
+        temp |= upper;
+        a->data[i + byteshift + 1] = temp;
+        temp = lower;
+
+        // a->data[i + byteshift] |= lower;
+        // a->data[i + byteshift + 1] |= upper;
+    }
+
+    a->data[byteshift] = temp;
+
+    // make sure we put in the new zeros
+    for (int i = 0; i < shift; i++) {
+        unsigned char temp = ~(0x01 << (i % 8));
+        a->data[i / 8] &= temp;
+    }
+
+    b_trim(a);
 }
 
 
@@ -392,11 +427,54 @@ bignum_t b_rshift(bignum_t a, unsigned int shift) {
 /**
  * Right Shift In Place
  */
-void b_rsip(bignum_t *a, unsigned int shift) {
-    if (a == NULL) printf("oh no\n");
-    bignum_t res = b_rshift((*a), shift);
-    b_free((*a));
-    *a = res;
+void b_rsip(bignum_t a, unsigned int shift) {
+    // if (a == NULL) printf("oh no\n");
+    // bignum_t res = b_rshift((*a), shift);
+    // b_free((*a));
+    // *a = res;
+
+    unsigned int bitshift = shift % 8;
+    unsigned int byteshift = shift / 8;
+    unsigned char mask = 0xFF >> (8 - bitshift);
+
+    unsigned char temp = 0;
+
+    for (int i = 0; i < a->size; i++) {
+        if (i - byteshift < 0) {
+            continue;
+        }
+
+        unsigned char lower = (a->data[i] & mask) << (8 - bitshift);
+        unsigned char upper = (a->data[i] & (~mask)) >> (bitshift);
+
+        // note to self - negating an unsigned does not make it signed again ;(
+        if (0 <= (int)(i - byteshift - 1)) {
+            temp |= lower;
+            a->data[i - byteshift - 1] = temp;
+            temp = upper;
+
+        } else temp = upper;
+
+        // this should never fail thanks to the continue above
+        // if (0 <= (int)(i - byteshift)) {
+        //     res->data[i - byteshift] |= upper;
+        // }
+
+    }
+
+
+    if ((int)(a->size - 1 - byteshift) >= 0) {
+        a->data[a->size - 1 - byteshift] = temp;
+    }
+
+
+    // make sure we erase the old stuff
+    for (int i = 0; i < shift; i++) {
+        unsigned char temp = ~(0x80 >> (i % 8));
+        a->data[a->size - 1 - (i / 8)] &= temp;
+    }
+
+    b_trim(a);
 }
 
 bignum_t b_mul(bignum_t a, bignum_t b) {
@@ -469,7 +547,7 @@ bignum_t b_div(bignum_t n, bignum_t d, bignum_t *r) {
     // we currently know that ds is bigger
     // want to make it smaller or equal
     while(b_comp(ns, ds) <= 0) {
-        b_rsip(&ds, 1);
+        b_rsip(ds, 1);
         shift--;
     }
 
@@ -485,14 +563,14 @@ bignum_t b_div(bignum_t n, bignum_t d, bignum_t *r) {
             ns = t;
             b_oriip(q, 1);
         }
-        b_rsip(&ds, 1);
-        b_lsip(&q, 1);
+        b_rsip(ds, 1);
+        b_lsip(q, 1);
     }
 
     *r = ns;
 
     // right shift once (not sure why, but we need to)
-    b_rsip(&q, 1);
+    b_rsip(q, 1);
 
     return q;
 }
@@ -526,7 +604,7 @@ bignum_t b_exp(bignum_t b, bignum_t e) {
 
         i++;
 
-        b_rsip(&exp, 1);
+        b_rsip(exp, 1);
     }
 
     if (b->sign) res->sign = (b_andi(e, 1)) ? 1 : 0;
@@ -624,11 +702,24 @@ int main(int argc, char** argv) {
 
         res = a << b;
         b_res = b_lshift(b_a, b);
+    } else if (strcmp(argv[2], "lsip") == 0) {
+        printf("left shifting in place...\n\n");
+
+        res = a << b;
+        b_res = b_copy(b_a);
+        b_lsip(b_res, b);
     } else if (strcmp(argv[2], "rs") == 0) {
         printf("right shifting...\n\n");
 
         res = a >> b;
         b_res = b_rshift(b_a, b);
+    } else if (strcmp(argv[2], "rsip") == 0) {
+        printf("right shifting in place...\n\n");
+
+        res = a >> b;
+
+        b_res = b_copy(b_a);
+        b_rsip(b_res, b);
     } else if (strcmp(argv[2], "mul") == 0) {
         printf("multiplying...\n\n");
 
