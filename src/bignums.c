@@ -95,6 +95,7 @@ bignum_t b_initv(int initial) {
     //printf("actual: 0x%02X 0x%02X 0x%02X 0x%02X\n", res->data[3], res->data[2], res->data[1], res->data[0]);
     //printf("wanted: 0x%02X 0x%02X 0x%02X 0x%02X\n", (initial & (mask << 24)) >> 24, (initial & (mask << 16)) >> 16, (initial & (mask << 8)) >> 8, initial & mask);
 
+    b_trim(res);
 
     return res;
 }
@@ -117,7 +118,7 @@ bignum_t b_copy(bignum_t a) {
 /**
  * trims leading 0 bytes in place
  */
-bignum_t b_trim(bignum_t a) {
+void b_trim(bignum_t a) {
 
 
     int i;
@@ -134,11 +135,9 @@ bignum_t b_trim(bignum_t a) {
 
     a->data = temp;
     a->size = i + 1;
-
-    return a;
 }
 
-bignum_t b_pad(bignum_t a, unsigned int size) {
+void b_pad(bignum_t a, unsigned int size) {
     unsigned char *temp = realloc(a->data, size);
     if (temp == NULL) {
         fprintf(stderr, "Error in padding bignum! Program not exiting\n");
@@ -151,7 +150,6 @@ bignum_t b_pad(bignum_t a, unsigned int size) {
 
     a->data = temp;
     a->size = size;
-    return a;
 }
 
 /**
@@ -213,7 +211,7 @@ bignum_t b_add(bignum_t a, bignum_t b) {
 
     // do we need to pad?
     if (b_bytes(smallest) != b_bytes(largest)) {
-        smallest = b_pad(smallest, largest->size);
+        b_pad(smallest, largest->size);
     }
 
     // init variables for addition
@@ -238,7 +236,7 @@ bignum_t b_add(bignum_t a, bignum_t b) {
         res->data[res->size - 1] = 1;
     }
 
-    res = b_trim(res);
+    b_trim(res);
 
     return res;
 
@@ -309,7 +307,7 @@ bignum_t b_sub(bignum_t a, bignum_t b) {
     // init variables for addition
     unsigned char carry = 0;
     
-    b = b_pad(b, a->size);
+    b_pad(b, a->size);
 
     for (int i = 0; i < a->size; i++) {
 
@@ -324,6 +322,9 @@ bignum_t b_sub(bignum_t a, bignum_t b) {
     return res;
 }
 
+/**
+ * Left Shift (logical)
+ */
 bignum_t b_lshift(bignum_t a, unsigned int shift) {
     unsigned int bitsnum = a->size * 8 + shift;
     unsigned int bytesnum = bitsnum / 8 + 1;
@@ -342,7 +343,7 @@ bignum_t b_lshift(bignum_t a, unsigned int shift) {
         res->data[i + byteshift + 1] |= upper;
     }
 
-    res = b_trim(res);
+    b_trim(res);
 
     return res;
 }
@@ -391,7 +392,9 @@ void b_lsip(bignum_t a, unsigned int shift) {
     b_trim(a);
 }
 
-
+/**
+ * Right Shift (logical)
+ */
 bignum_t b_rshift(bignum_t a, unsigned int shift) {
     bignum_t res = b_init(b_bytes(a)); res->sign = a->sign;
 
@@ -507,7 +510,7 @@ bignum_t b_mul(bignum_t a, bignum_t b) {
     b_free(smallest);
     b_free(largest);
 
-    res = b_trim(res);
+    b_trim(res);
 
     res->sign = a->sign ^ b->sign;
 
@@ -633,10 +636,6 @@ void b_print(bignum_t a) {
     }
 
     printf("bignum: %s%u\n", ((a->sign == 0) ? "+" : "-"), total);
-
-
-    
-
 }
 
 char* b_tostr(bignum_t a) {
@@ -679,8 +678,8 @@ int main(int argc, char** argv) {
     int a = atoi(argv[1]);
     int b = atoi(argv[3]);
 
-    bignum_t b_a = b_initv(a); b_a = b_trim(b_a);
-    bignum_t b_b = b_initv(b); b_b = b_trim(b_b);
+    bignum_t b_a = b_initv(a); b_trim(b_a);
+    bignum_t b_b = b_initv(b); b_trim(b_b);
 
     printf("inputted: %d %d\n", a, b);
     printf("hex: 0x%04X 0x%04X\n\n", a, b);
