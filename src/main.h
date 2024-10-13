@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
+#include <sys/time.h>
 
 // misc posix stuff
 #include <unistd.h>
@@ -42,13 +44,13 @@ typedef struct bignum {
 // bignum functions
 
 // creation and deletion
-bignum_t b_gen(); // non-functional yet
+bignum_t b_gen(unsigned int size); // non-functional yet
 bignum_t b_init(unsigned int size);
 bignum_t b_initv(int initial);
 void b_free(bignum_t a);
 bignum_t b_copy(bignum_t a);
-bignum_t b_create_local_copy(bignum_t a);
-bignum_t b_create_local(unsigned int size);
+// bignum_t b_create_local_copy(bignum_t a);
+// bignum_t b_create_local(unsigned int size);
 
 // utility
 unsigned int b_bytes(bignum_t a);

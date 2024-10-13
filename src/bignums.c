@@ -4,8 +4,36 @@
 
 const unsigned char sign_mask = 0x01;
 
-bignum_t b_gen() {
+/**
+ * Generates a number (n - 1), for testing primality of n
+ */
+bignum_t b_gen(unsigned int size) {
+    bignum_t res = b_init(size);
 
+    struct timespec ts;
+    timespec_get(&ts, TIME_UTC);
+
+    srand((unsigned int)(ts.tv_nsec % (unsigned int)(0xFFFFFFFF)));
+    
+    res->data[0] = (rand() % 0x7F) << 1;
+
+    for (int i = 1; i < size; i++) {
+        res->data[i] = rand() % 0xFF;
+    }
+
+
+    return res;
+}
+
+int b_is_prime(bignum_t a) {
+    bignum_t num = b_copy(a);
+
+    // first, we perform a fermat test
+    bignum_t fermat_a = b_gen(4);
+    bignum_t fermat_e = b_exp(fermat_a, a);
+
+
+    return 0;
 }
 
 unsigned int b_bytes(bignum_t a) {
@@ -141,7 +169,7 @@ void b_pad(bignum_t a, unsigned int size) {
     unsigned char *temp = realloc(a->data, size);
     if (temp == NULL) {
         fprintf(stderr, "Error in padding bignum! Program not exiting\n");
-        return a;
+        return;
     }
 
     if (size > a->size) {
@@ -549,7 +577,7 @@ bignum_t b_div(bignum_t n, bignum_t d, bignum_t *r) {
 
     // we currently know that ds is bigger
     // want to make it smaller or equal
-    while(b_comp(ns, ds) <= 0) {
+    while(b_comp(ns, ds) < 0) {
         b_rsip(ds, 1);
         shift--;
     }
@@ -639,10 +667,12 @@ void b_print(bignum_t a) {
 }
 
 char* b_tostr(bignum_t a) {
+    bignum_t zero = b_init(1);
+    if (b_comp(a, zero) == 0) return "0";
+
     bignum_t n = b_copy(a);
     bignum_t ten = b_initv(10);
     bignum_t rem;
-    bignum_t zero = b_init(1);
     int len = 0;
 
     while (b_comp(n, zero) >= 1) {
@@ -662,6 +692,7 @@ char* b_tostr(bignum_t a) {
         bignum_t temp = n;
         n = b_div(n, ten, &rem);
         b_free(temp);
+        if (b_toi(rem) >= 10) printf("aaaaaa %d\n", b_toi(rem));
         str[len - 1 - i] = b_toi(rem) + '0';
     }
     str[len] = '\0';
@@ -739,6 +770,11 @@ int main(int argc, char** argv) {
 
         res = pow(a, b);
         b_res = b_exp(b_a, b_b);
+    } else if (strcmp(argv[2], "rand") == 0) {
+        printf("randoming...\n\n");
+
+        res = 0;
+        b_res = b_gen(a);
     }
     else {
         printf("Invalid operation!\n");
@@ -747,6 +783,5 @@ int main(int argc, char** argv) {
 
     printf("ints: %d (0x%04X)\n", res, res);
     b_print(b_res);
-    printf("bignum: %s\n", b_tostr(b_res));
-
+    printf("bignum: %s%s\n", ((b_res->sign == 0) ? "+" : "-"), b_tostr(b_res));
 }
