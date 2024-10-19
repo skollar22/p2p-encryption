@@ -26,13 +26,51 @@ bignum_t b_gen(unsigned int size) {
 }
 
 int b_is_prime(bignum_t a) {
-    bignum_t num = b_copy(a);
 
-    // first, we perform a fermat test
-    bignum_t fermat_a = b_gen(4);
-    bignum_t fermat_e = b_exp(fermat_a, a);
+    
+    
+    int i = 0;
 
+    bignum_t res = NULL;
+    bignum_t fermat_a = NULL;
+    bignum_t fermat_e = NULL;
+    bignum_t fermat_n = NULL;
 
+    // test val
+    bignum_t one = b_initv(1); b_trim(one);
+
+    do {
+
+        i++;
+
+        b_free(res);
+        b_free(fermat_n);
+        
+        // first, we perform a fermat test
+        bignum_t fermat_a = b_gen(4);
+
+        bignum_t fermat_e = b_gen(2);
+
+        fermat_n = b_copy(fermat_e);
+
+        b_oriip(fermat_n, 1);
+
+        // actual test
+        res = b_mexp(fermat_a, fermat_e, fermat_n);
+
+        b_free(fermat_a); fermat_a = NULL;
+        b_free(fermat_e); fermat_e = NULL;
+
+    } while (b_comp(res, one) != 0);
+
+    printf("prime found! %s! tries = %d\n", b_tostr(fermat_n), i);
+    b_free(one);
+    b_free(fermat_a);
+    b_free(fermat_e);
+    b_free(fermat_n);
+    
+
+    b_free(res);
     return 0;
 }
 
@@ -129,6 +167,7 @@ bignum_t b_initv(int initial) {
 }
 
 void b_free(bignum_t a) {
+    if (a == NULL) return;
     free(a->data);
     free(a);
 }
@@ -352,6 +391,7 @@ bignum_t b_sub(bignum_t a, bignum_t b) {
 
 /**
  * Left Shift (logical)
+ * (shift is in bits)
  */
 bignum_t b_lshift(bignum_t a, unsigned int shift) {
     unsigned int bitsnum = a->size * 8 + shift;
@@ -378,6 +418,7 @@ bignum_t b_lshift(bignum_t a, unsigned int shift) {
 
 /**
  * Left Shift In Place
+ * (shift is in bits)
  */
 void b_lsip(bignum_t a, unsigned int shift) {
     // bignum_t res = b_lshift((*a), shift);
@@ -422,6 +463,7 @@ void b_lsip(bignum_t a, unsigned int shift) {
 
 /**
  * Right Shift (logical)
+ * (shift is in bits)
  */
 bignum_t b_rshift(bignum_t a, unsigned int shift) {
     bignum_t res = b_init(b_bytes(a)); res->sign = a->sign;
@@ -457,6 +499,7 @@ bignum_t b_rshift(bignum_t a, unsigned int shift) {
 
 /**
  * Right Shift In Place
+ * (shift is in bits)
  */
 void b_rsip(bignum_t a, unsigned int shift) {
     // if (a == NULL) printf("oh no\n");
@@ -528,8 +571,8 @@ bignum_t b_mul(bignum_t a, bignum_t b) {
         for (int j = 0; j < 8; j++) {
             if (smallest->data[i] & (1 << j)) {
                 // need to add the shift
-                bignum_t temp = b_lshift(largest, i * 8 + j);
-                res = b_add(res, temp);
+                bignum_t temp = b_lshift(largest, i * 8 + j); bignum_t temp2 = res;
+                res = b_add(res, temp); b_free(temp2);
                 b_free(temp);
             }
         }
@@ -599,11 +642,67 @@ bignum_t b_div(bignum_t n, bignum_t d, bignum_t *r) {
     }
 
     *r = ns;
-
+    b_free(ds);
     // right shift once (not sure why, but we need to)
     b_rsip(q, 1);
 
     return q;
+}
+
+/**
+ * Modulo operation
+ * @param a - the value
+ * @param m - the modulo base
+ * @returns a new pointer to the result
+ */
+bignum_t b_mod(bignum_t a, bignum_t m) {\
+    bignum_t value = b_copy(a); b_trim(value); value->sign = 0;
+    bignum_t base = b_copy(m); b_trim(base); base->sign = 0;
+
+    if (b_comp(value, base) < 0) {
+        // if m is bigger than a already, return a
+        b_free(base);
+        return value;
+    }
+
+    // we need to make m bigger than a, so get the difference in bytes (plus 1)
+    int bits_dif = (b_bytes(value) - b_bytes(base) + 1) * 8;
+
+    b_lsip(base, bits_dif);
+
+    while(b_comp(value, base) < 0) {
+        b_rsip(base, 1);
+        bits_dif--;
+    }
+
+    for (int i = 0; i <= bits_dif; i++) {
+        // if we can subtract the base from the value, do so
+        if (b_comp(value, base) >= 0) {
+            bignum_t temp = value;
+            value = b_sub(value, base);
+            b_free(temp);
+        }
+
+        // shift the base down one
+        b_rsip(base, 1);
+    }
+
+    b_trim(value);
+    b_free(base);
+
+    return value;
+}
+
+/**
+ * Modulo in place
+ * @param a - the value - will be reduced to the result
+ * @param m - the modulo base
+ */
+void b_modip(bignum_t *a, bignum_t m) {
+    bignum_t temp = (*a);
+    bignum_t res = b_mod((*a), m);
+    (*a) = res;
+    b_free(temp);
 }
 
 /**
@@ -643,6 +742,63 @@ bignum_t b_exp(bignum_t b, bignum_t e) {
     return res;
 }
 
+/**
+ * Modulo Exponent function
+ * @param b - base
+ * @param e - exponent
+ * @param m - the modulo base
+ * @returns b^(e) mod m
+ */
+bignum_t b_mexp(bignum_t b, bignum_t e, bignum_t m) {
+
+    /**
+     * Using the property that (a * b) mod n = (a mod n) * (b mod n) mod n,
+     * we just mod everything before multiplication to keep the values down a bit
+     * otherwise it should be the exact same as regular exponentiation
+     */
+
+    bignum_t zero = b_init(1);
+    bignum_t base = b_mod(b, m); base->sign = 0;
+    bignum_t exp = b_copy(e); exp->sign = 0;
+
+
+    // set our result to 1
+    bignum_t res = b_init(1);
+    b_oriip(res, 1);
+
+    int i = 0;
+    while(b_comp(exp, zero) >= 1) {
+        if (b_andi(exp, 1)) {
+
+            bignum_t temp = res;
+
+            res = b_mul(res, base);
+
+            b_free(temp);
+            b_modip(&res, m);
+        }
+
+        // square it and mod m
+        bignum_t temp = base;
+        base = b_mul(base, base);
+        b_free(temp);
+        b_modip(&base, m);
+
+
+        i++;
+        b_rsip(exp, 1);
+    }
+
+
+    if (b->sign) res->sign = (b_andi(e, 1)) ? 1 : 0;
+
+    b_free(zero);
+    b_free(base);
+    b_free(exp);
+
+    return res;
+}
+
 int b_toi(bignum_t a) {
     if (a->size > 4) return (a->sign == 0) ? __INT32_MAX__ : -__INT32_MAX__;
 
@@ -664,6 +820,15 @@ void b_print(bignum_t a) {
     }
 
     printf("bignum: %s%u\n", ((a->sign == 0) ? "+" : "-"), total);
+}
+
+void b_prints(bignum_t a) {
+    unsigned int total = 0;
+    for (int i = 0; i < a->size; i++) {
+        total += a->data[i] * pow(2, 8*i);
+    }
+
+    printf("%s%u", ((a->sign == 0) ? "+" : "-"), total);
 }
 
 char* b_tostr(bignum_t a) {
@@ -694,13 +859,24 @@ char* b_tostr(bignum_t a) {
         b_free(temp);
         if (b_toi(rem) >= 10) printf("aaaaaa %d\n", b_toi(rem));
         str[len - 1 - i] = b_toi(rem) + '0';
+        b_free(rem);
     }
     str[len] = '\0';
-
+    b_free(zero); 
+    b_free(ten); 
+    b_free(n); 
     return str;
 }
 
 int main(int argc, char** argv) {
+
+    printf("hello sir\n");
+
+    bignum_t temp = b_init(1);
+    for (int i = 0; i < 10; i++) b_is_prime(temp);
+    b_free(temp);
+    return 0;
+
     if (argc != 4) {
         fprintf(stderr, "usage: ./test <num1> <op> <num2>");
         exit(1);
@@ -775,6 +951,28 @@ int main(int argc, char** argv) {
 
         res = 0;
         b_res = b_gen(a);
+    } else if (strcmp(argv[2], "mod") == 0) {
+        printf("mod...\n\n");
+
+        res = a % b;
+        b_res = b_mod(b_a, b_b);
+    } else if (strcmp(argv[2], "mexp") == 0) {
+        printf("modulo exponentiation...\n\nenter the modulus: ");
+
+        int m;
+        scanf("%d", &m);
+
+        res = (int)(pow(a, b)) % m;
+
+        bignum_t b_m = b_initv(m);
+
+        b_res = b_mexp(b_a, b_b, b_m);
+
+        int temp = (int)(pow(a, b));
+        printf("via regular methods:\nints exponent = %d\n", temp);
+        b_print(b_exp(b_a, b_b));
+        printf("now mod:\nints = %d\n", temp % m);
+        b_print(b_mod(b_exp(b_a, b_b), b_m));
     }
     else {
         printf("Invalid operation!\n");

@@ -62,6 +62,7 @@ unsigned int b_smallest_bytes(bignum_t a, bignum_t b);
 unsigned int b_largest_bytes(bignum_t a, bignum_t b);
 int b_comp(bignum_t a, bignum_t b);
 void b_print(bignum_t a);
+void b_prints(bignum_t a);
 
 // manipulation
 void b_trim(bignum_t a);
@@ -80,7 +81,10 @@ bignum_t b_add(bignum_t a, bignum_t b);
 bignum_t b_sub(bignum_t a, bignum_t b);
 bignum_t b_mul(bignum_t a, bignum_t b);
 bignum_t b_div(bignum_t n, bignum_t d, bignum_t *r);
+bignum_t b_mod(bignum_t a, bignum_t m);
+void b_modip(bignum_t *a, bignum_t m);
 bignum_t b_exp(bignum_t b, bignum_t e);
+bignum_t b_mexp(bignum_t b, bignum_t e, bignum_t m);
 
 // conversions
 int b_toi(bignum_t a);
