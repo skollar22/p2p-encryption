@@ -1,14 +1,51 @@
 #include "main.h"
 
+#define BIT_LENGTH 32
+
 #include <math.h>
 
 const unsigned char sign_mask = 0x01;
+
+double madd_time = 0.0;
+long long madd_calls = 0;
+
+double mmul_time = 0.0;
+long long mmul_calls = 0;
+
+double subip_time = 0.0;
+long long subip_calls = 0;
+
+double msub_time = 0.0;
+long long msub_calls = 0;
+
+double comp_time = 0.0;
+long long comp_calls = 0;
+
+double mexp_time = 0.0;
+long long mexp_calls = 0;
+
+double modip_time = 0.0;
+long long modip_calls = 0;
+
+double mlsip_time = 0.0;
+long long mlsip_calls = 0;
+
+double fftmul_time = 0.0;
+long long fftmul_calls = 0.0;
+
+/**
+ * TODO currently
+ * - there is a segfault somewhere in bigmod.c
+ * - optimise add and sub functions
+ * - convert stuff to bit manipulation to speed up
+ */
 
 /**
  * Generates a number (n - 1), for testing primality of n
  */
 bignum_t b_gen(unsigned int size) {
     bignum_t res = b_init(size);
+    bignum_t zero = b_initc(0);
 
     struct timespec ts;
     timespec_get(&ts, TIME_UTC);
@@ -21,57 +58,130 @@ bignum_t b_gen(unsigned int size) {
         res->data[i] = rand() % 0xFF;
     }
 
+    if (b_comp(res, zero) == 0) {
+        b_free(zero);
+        b_free(res);
+        return b_gen(size);
+    }
+
+    b_free(zero);
 
     return res;
 }
 
-int b_is_prime(bignum_t a) {
+bignum_t b_gen_prime(unsigned int size) {
+    bignum_t potential_prime = NULL;
+    bignum_t composite = NULL;
+    bignum_t two = b_initc(2);
 
-    
-    
+    struct timespec start, end;
+    clock_gettime(CLOCK_MONOTONIC_RAW, &start);
+
     int i = 0;
 
-    bignum_t res = NULL;
-    bignum_t fermat_a = NULL;
-    bignum_t fermat_e = NULL;
-    bignum_t fermat_n = NULL;
-
-    // test val
-    bignum_t one = b_initv(1); b_trim(one);
+    composite = b_gen(size);
+    potential_prime = b_ori(composite, 1);
 
     do {
 
         i++;
 
-        b_free(res);
-        b_free(fermat_n);
+        b_addip(composite, two);
+        b_free(potential_prime);
+        potential_prime = b_ori(composite, 1);
+
         
-        // first, we perform a fermat test
-        bignum_t fermat_a = b_gen(4);
+    } while (!b_is_prime(potential_prime, composite));
 
-        bignum_t fermat_e = b_gen(2);
+    b_free(composite);
 
-        fermat_n = b_copy(fermat_e);
+    clock_gettime(CLOCK_MONOTONIC_RAW, &end);
+    uint64_t delta_t = (end.tv_sec - start.tv_sec) * 1000000 + (end.tv_nsec - start.tv_nsec) / 1000;
 
-        b_oriip(fermat_n, 1);
+    uint64_t us_pt = delta_t / i;
 
-        // actual test
-        res = b_mexp(fermat_a, fermat_e, fermat_n);
+    // printf("\n\n\ntries = %d \t us/try = %lu \t us tot = %lu \t", i, us_pt, delta_t);
 
-        b_free(fermat_a); fermat_a = NULL;
-        b_free(fermat_e); fermat_e = NULL;
+    return potential_prime;
+}
 
-    } while (b_comp(res, one) != 0);
+int b_is_prime(bignum_t n, bignum_t n_minus) {
 
-    printf("prime found! %s! tries = %d\n", b_tostr(fermat_n), i);
-    b_free(one);
-    b_free(fermat_a);
-    b_free(fermat_e);
-    b_free(fermat_n);
-    
+    // test val
+    bignum_t one = b_initc(1);
 
-    b_free(res);
-    return 0;
+    // Fermat test
+    bignum_t fermat_a = b_gen(1);
+
+    bignum_t res = b_mexp(fermat_a, n_minus, n);
+    // printf("%s\n", b_tostr(res));
+
+    if (b_comp(res, one) != 0) return 0;
+
+    b_free(fermat_a);   fermat_a = NULL;
+    b_free(res);        res = NULL;
+
+
+    // printf("fermat approved! %s\n", b_tostr(n));
+
+
+    // Miller-Rabin test
+    bignum_t mr_num = b_copy(n_minus);
+
+    // printf("n-minus        :\t%s\n", b_tostr(mr_num));
+
+    int s = 0;
+    unsigned char mask = 0x01;
+    while (b_andi(mr_num, mask) == 0) {
+        s++;
+        b_rsip(mr_num, 1);
+    }
+
+    // printf("d              :\t%s\n", b_tostr(mr_num));
+    // printf("s              :\t%d\n", s);
+
+
+    bignum_t mr_a = NULL;
+    bignum_t mr_x = NULL;
+    bignum_t mr_y = NULL;
+
+    for (int i = 0; i < 20; i++) {
+
+
+        b_free(mr_a);
+        b_free(mr_x);
+
+        mr_a = b_gen(BIT_LENGTH);
+
+        // printf("a              :\t%s\n", b_tostr(mr_a));
+
+        mr_x = b_mexp(mr_a, mr_num, n);
+
+        int passed = 0;
+
+        for (int j = 0; j < s; j++) {
+
+            // printf("x              :\t%s\tfor r = %d\n", b_tostr(mr_x), j);
+
+            if ((b_comp(mr_x, one) == 0) || (b_comp(mr_x, n_minus) == 0)) {
+                passed = 1;
+            }
+            mr_y = b_fftmul(mr_x, mr_x);
+            b_modip(mr_y, n);
+            bignum_t temp = mr_x;
+            mr_x = mr_y;
+            // b_mmul(temp, temp, n);
+            b_free(temp);
+        }
+
+        // printf("x              :\t%s\tfor x=n-1\n\n", b_tostr(mr_x));
+
+        if (!passed) return 0;
+
+        if (b_comp(mr_x, one) != 0) return 0;
+    }
+
+    return 1;
 }
 
 unsigned int b_bytes(bignum_t a) {
@@ -129,6 +239,12 @@ int b_comp(bignum_t a, bignum_t b) {
     return 0;
 }
 
+/**
+ * Initialisation of a bignum
+ * @param size - the number of bytes to initialise
+ * 
+ * bignum is initialised with all bytes equal to zero
+ */
 bignum_t b_init(unsigned int size) {
     // init memory for struct
     bignum_t res = malloc(sizeof(struct bignum));
@@ -144,7 +260,14 @@ bignum_t b_init(unsigned int size) {
     res->sign = 0;
 }
 
+/**
+ * Initialise with Value
+ * @param initial - the initial value for the bignum (as an int)
+ * 
+ */
 bignum_t b_initv(int initial) {
+    unsigned int mask = 0xFF;
+
     bignum_t res = b_init(4);
 
     if (initial < 0) {
@@ -152,34 +275,236 @@ bignum_t b_initv(int initial) {
         initial = -initial;
     }
 
-    unsigned int mask = 0xFF;
     res->data[0] = initial & mask;
     res->data[1] = (initial & (mask << 8)) >> 8;
     res->data[2] = (initial & (mask << 16)) >> 16;
     res->data[3] = (initial & (mask << 24)) >> 24;
-
-    //printf("actual: 0x%02X 0x%02X 0x%02X 0x%02X\n", res->data[3], res->data[2], res->data[1], res->data[0]);
-    //printf("wanted: 0x%02X 0x%02X 0x%02X 0x%02X\n", (initial & (mask << 24)) >> 24, (initial & (mask << 16)) >> 16, (initial & (mask << 8)) >> 8, initial & mask);
 
     b_trim(res);
 
     return res;
 }
 
+bignum_t b_initl(long long initial) {
+    unsigned int mask = 0xFF;
+
+    bignum_t res = b_init(8);
+
+    if (initial < 0) {
+        res->sign = 1;
+        initial = -initial;
+    }
+
+    for (int i = 0; i < 8; i++) {
+        res->data[i] = (initial & (mask << i * 8)) >> i * 8;
+    }
+
+    b_trim(res);
+
+    return res;
+}
+
+/**
+ * Initialise with Character
+ * @param initial - the initial value for the bignum (as an unsigned char)
+ * 
+ */
+bignum_t b_initc(unsigned char initial) {
+    bignum_t res = malloc(sizeof(struct bignum));
+
+    res->size = 1;
+    res->sign = 0;
+    res->data = malloc(sizeof(unsigned char));
+
+    res->data[0] = initial;
+    
+    return res;
+}
+
+/**
+ * Free Bignum
+ * @param a - the bignum to be free'd
+ * 
+ * Frees all associated memory with the given bignum \n
+ * Null-safe
+ */
 void b_free(bignum_t a) {
     if (a == NULL) return;
     free(a->data);
     free(a);
 }
 
+/**
+ * Copy Constructor
+ * @param a - the number to be copied
+ * @returns a new bignum with the exact same values, but entirely different memory
+ */
 bignum_t b_copy(bignum_t a) {
-    bignum_t res = b_init(a->size);
+    bignum_t res = malloc(sizeof(struct bignum));
+
+    res->sign = a->sign;
+    res->size = a->size;
+    res->data = malloc(sizeof(unsigned char) * res->size);
 
     for (int i = 0; i < res->size; i++) {
         res->data[i] = a->data[i];
     }
 
-    res->sign = a->sign;
+    // how tf did it work without this
+    return res;
+}
+
+/**
+ * Absolute Value Copy
+ * @param a - the number to be copied
+ * @returns a new bignum with the exact same values, but entirely different memory
+ * 
+ * The sign of the new bignum will always be 0 (positive)
+ */
+bignum_t b_acopy(bignum_t a) {
+    bignum_t res = malloc(sizeof(struct bignum));
+
+    res->sign = 0;
+    res->size = a->size;
+    res->data = malloc(sizeof(unsigned char) * res->size);
+
+    for (int i = 0; i < res->size; i++) {
+        res->data[i] = a->data[i];
+    }
+
+    // how tf did it work without this
+    return res;
+}
+
+bignum_t b_fromstr(char* str, unsigned int n) {
+    bignum_t res = b_init(n);
+    for (int i = 0; i < n; i++) {
+        res->data[i] = str[i];
+    }
+    return res;
+}
+
+unsigned char num_from_hex(unsigned char hexval) {
+    if (hexval >= '0' && hexval <= '9') {
+        return hexval - '0';
+    } else if (hexval >= 'A' && hexval <= 'F') {
+        return hexval - 'A' + 0x0A;
+    } else if (hexval >= 'a' && hexval <= 'f') {
+        return hexval - 'a' + 0x0A;
+    } else return 0;
+}
+
+bignum_t b_fromhex(char *str, unsigned int n) {
+    bignum_t res = b_init(n / 2 + 1);
+
+    // printf("n=%u\n", n);
+
+    unsigned int even = (n % 2 == 0) ? 0 : 1;
+
+    for (int i = n - 2; i > 0; i -= 2) {
+        unsigned char lower = num_from_hex(str[i]);
+        unsigned char upper = num_from_hex(str[i-1]);
+
+        // printf("i=%d\tupper=%u\tlower=%u\n", i, upper, lower);
+        // printf("str[%d] = %c\tstr[%d] = %c\n", i, str[i], i-1, str[i-1]);
+
+        res->data[(n-i-1)/2] = lower | (upper << 4);
+
+        // printf("(n-i)/2=%d\tres[%d] = %02X\n", (n-i)/2, (n-i)/2, res->data[(n-i)/2]);
+    }
+
+    if (!even) {
+        // printf("hello\n");
+        res->data[(n-1)/2] |= (num_from_hex(str[0]));
+    }
+
+    b_trim(res);
+
+    // b_print(res);
+    // printf("hex: %s\n", b_tohex(res));
+
+    return res;
+}
+
+/**
+ * Gets the p_minus value - if a is odd, truncates the final 1, otherwise returns a new copy of a
+ * @param a - the number to operate on
+ */
+bignum_t b_minus(bignum_t a) {
+    bignum_t res = b_acopy(a);
+
+    res->data[0] &= 0xFE;
+
+    return res;
+}
+
+/**
+ * Modular Multaplicative Inverse (using the Extended Euclidian Algorithm)
+ * @param a - mmi of the result
+ * @param b - modulo
+ */
+bignum_t b_mmi(bignum_t a, bignum_t b) {
+    bignum_t r0 = b_acopy(a);
+    bignum_t r1 = b_acopy(b);
+
+    bignum_t s0 = b_initc(1);
+    bignum_t s1 = b_initc(0);
+
+    bignum_t r2 = NULL;
+    bignum_t s2 = NULL;
+
+    bignum_t qi = NULL;
+    bignum_t temp = NULL;
+    bignum_t zero = b_initc(0);
+
+    int i = 0;
+
+    while (1) {
+        qi = b_div(r0, r1, &r2);
+        b_free(r2);
+        temp = b_mul(qi, r1);
+        r2 = b_sub(r0, temp);
+        b_free(temp);
+
+        
+
+        temp = b_mul(qi, s1);
+        s2 = b_sub(s0, temp);
+        b_free(temp);
+
+        if (b_comp(r2, zero) == 0) {
+
+            b_free(qi);
+            b_free(r0);
+            b_free(r1);
+            b_free(r2);
+
+            b_free(s0);
+
+            if (s1->sign) {
+                b_subip(s1, b);
+            }
+
+            b_free(zero);
+
+            bignum_t res = b_acopy(s1);
+
+            b_free(s1);
+
+            return res;
+        }
+
+        b_free(r0);
+        b_free(s0);
+
+        r0 = r1;
+        s0 = s1;
+
+        r1 = r2;
+        s1 = s2;
+
+        i++;
+    }
 }
 
 /**
@@ -187,6 +512,8 @@ bignum_t b_copy(bignum_t a) {
  */
 void b_trim(bignum_t a) {
 
+    // no trim needed
+    if (a->data[a->size - 1]) return;
 
     int i;
     for (i = a->size - 1; i > 0; i--) {
@@ -204,8 +531,14 @@ void b_trim(bignum_t a) {
     a->size = i + 1;
 }
 
+/**
+ * Pads the bignum with leading zero bytes
+ * @param a - the bignum to be padded
+ * @param size - the new padded size (in bytes)
+ */
 void b_pad(bignum_t a, unsigned int size) {
-    unsigned char *temp = realloc(a->data, size);
+    if (size <= b_bytes(a)) return;
+    unsigned char *temp = realloc(a->data, sizeof(unsigned char) * size);
     if (temp == NULL) {
         fprintf(stderr, "Error in padding bignum! Program not exiting\n");
         return;
@@ -217,6 +550,16 @@ void b_pad(bignum_t a, unsigned int size) {
 
     a->data = temp;
     a->size = size;
+}
+
+/**
+ * Or Immediate
+ */
+bignum_t b_ori(bignum_t a, unsigned char val) {
+    if (a == NULL || a->size < 1) return a;
+    bignum_t res = b_copy(a);
+    b_oriip(res, val);
+    return res;
 }
 
 /**
@@ -243,8 +586,8 @@ bignum_t b_add(bignum_t a, bignum_t b) {
     if (a->sign != 0 && b->sign != 0) {
         // same as - (a + b)
         // re-call function and then change sign
-        bignum_t t1 = b_copy(a); t1->sign = 0;
-        bignum_t t2 = b_copy(b); t2->sign = 0;
+        bignum_t t1 = b_acopy(a);
+        bignum_t t2 = b_acopy(b);
         bignum_t res = b_add(t1, t2);
         b_free(t1);
         b_free(t2);
@@ -255,7 +598,7 @@ bignum_t b_add(bignum_t a, bignum_t b) {
     // a neg => (-a) + b
     if (a->sign != 0 && b->sign == 0) {
         // same as b - a
-        bignum_t t1 = b_copy(a); t1->sign = 0;
+        bignum_t t1 = b_acopy(a);
         bignum_t res = b_sub(b, t1);
         b_free(t1);
         return res;
@@ -264,7 +607,7 @@ bignum_t b_add(bignum_t a, bignum_t b) {
     // b neg => a + (-b)
     if (a->sign == 0 && b->sign != 0) {
         // same as a - b
-        bignum_t t1 = b_copy(b); t1->sign = 0;
+        bignum_t t1 = b_acopy(b);
         bignum_t res = b_sub(a, t1);
         b_free(t1);
         return res;
@@ -314,8 +657,8 @@ bignum_t b_sub(bignum_t a, bignum_t b) {
     // both neg => (-a) - (-b)
     if (a->sign != 0 && b->sign != 0) {
         // same as b - a
-        bignum_t t1 = b_copy(a); t1->sign = 0;
-        bignum_t t2 = b_copy(b); t2->sign = 0;
+        bignum_t t1 = b_acopy(a);
+        bignum_t t2 = b_acopy(b);
 
         bignum_t res = b_sub(t2, t1);
         b_free(t1);
@@ -326,8 +669,8 @@ bignum_t b_sub(bignum_t a, bignum_t b) {
     // a neg => (-a) - b
     if (a->sign != 0 && b->sign == 0) {
         // same as -(a + b)
-        bignum_t t1 = b_copy(a); t1->sign = 0;
-        bignum_t t2 = b_copy(b); t1->sign = 0;
+        bignum_t t1 = b_acopy(a);
+        bignum_t t2 = b_acopy(b);
 
         bignum_t res = b_add(t1, t2);
         b_free(t1);
@@ -339,7 +682,7 @@ bignum_t b_sub(bignum_t a, bignum_t b) {
     // b neg => a - (-b)
     if (a->sign == 0 && b->sign != 0) {
         // same as a + b
-        bignum_t t1 = b_copy(b); t1->sign = 0;
+        bignum_t t1 = b_acopy(b);
         bignum_t res = b_add(a, t1);
         b_free(t1);
         return res;
@@ -355,7 +698,7 @@ bignum_t b_sub(bignum_t a, bignum_t b) {
     // if a and b are the same, return 0
     if (largest == smallest) {
         printf("bad things, potter\n");
-        return b_init(1);
+        return b_initc(0);
     }
 
     if (largest == b) {
@@ -387,6 +730,48 @@ bignum_t b_sub(bignum_t a, bignum_t b) {
     }
 
     return res;
+}
+
+/**
+ * Add In Place
+ * @param a - first number (result is stored here)
+ * @param b - second number
+ */
+void b_addip(bignum_t a, bignum_t b) {
+
+    unsigned int largest_bytes = b_largest_bytes(a, b);
+
+    // we need to make sure there is enough room in a to store the result
+    b_pad(a, largest_bytes + 1);
+    b_pad(b, largest_bytes + 1);
+
+    // init variables for addition
+    unsigned char carry = 0;
+    unsigned char a_byte = 0;
+    unsigned char b_byte = 0;
+    unsigned int a_i = 0;
+    unsigned int b_i = 0;
+    unsigned int c_i = 0;
+    unsigned int overflow_check = (unsigned int) 0xFF;
+
+    // add bytewise
+    for (int i = 0; i < a->size; i++) {
+
+        a_byte = a->data[i];
+        b_byte = b->data[i];
+
+        a->data[i] = a_byte + b_byte + carry;
+
+        a_i = (unsigned int) a_byte;
+        b_i = (unsigned int) b_byte;
+        c_i = (unsigned int) carry;
+
+        if (a_i + b_i + c_i > overflow_check) carry = 1;
+        else carry = 0;
+        
+    }
+
+    b_trim(a);
 }
 
 /**
@@ -554,11 +939,9 @@ void b_rsip(bignum_t a, unsigned int shift) {
 bignum_t b_mul(bignum_t a, bignum_t b) {
     // gets the smallest and largest numbers
     bignum_t smallest = b_smallest(a, b);
-    smallest = b_copy(smallest);
-    smallest->sign = 0;
+    smallest = b_acopy(smallest);
     bignum_t largest = b_largest(a, b);
-    largest = b_copy(largest);
-    largest->sign = 0;
+    largest = b_acopy(largest);
 
     // TODO fix pls
     if (smallest == largest) {
@@ -588,10 +971,14 @@ bignum_t b_mul(bignum_t a, bignum_t b) {
     return res;
 }
 
+
+
 /**
- * n - numerator
- * d - denominator
- * r - remainder (mod) - this will be overwritten
+ * Division function
+ * 
+ * @param n - numerator
+ * @param d - denominator
+ * @param r - remainder (mod) - this will be overwritten
  * 
  * @returns q, the quotient of the division
  */
@@ -615,7 +1002,7 @@ bignum_t b_div(bignum_t n, bignum_t d, bignum_t *r) {
 
     // try align bytes in the copies
     bignum_t ds = b_lshift(d, shift); ds->sign = 0;
-    bignum_t ns = b_copy(n); ns->sign = 0;
+    bignum_t ns = b_acopy(n);
 
 
     // we currently know that ds is bigger
@@ -650,75 +1037,18 @@ bignum_t b_div(bignum_t n, bignum_t d, bignum_t *r) {
 }
 
 /**
- * Modulo operation
- * @param a - the value
- * @param m - the modulo base
- * @returns a new pointer to the result
- */
-bignum_t b_mod(bignum_t a, bignum_t m) {\
-    bignum_t value = b_copy(a); b_trim(value); value->sign = 0;
-    bignum_t base = b_copy(m); b_trim(base); base->sign = 0;
-
-    if (b_comp(value, base) < 0) {
-        // if m is bigger than a already, return a
-        b_free(base);
-        return value;
-    }
-
-    // we need to make m bigger than a, so get the difference in bytes (plus 1)
-    int bits_dif = (b_bytes(value) - b_bytes(base) + 1) * 8;
-
-    b_lsip(base, bits_dif);
-
-    while(b_comp(value, base) < 0) {
-        b_rsip(base, 1);
-        bits_dif--;
-    }
-
-    for (int i = 0; i <= bits_dif; i++) {
-        // if we can subtract the base from the value, do so
-        if (b_comp(value, base) >= 0) {
-            bignum_t temp = value;
-            value = b_sub(value, base);
-            b_free(temp);
-        }
-
-        // shift the base down one
-        b_rsip(base, 1);
-    }
-
-    b_trim(value);
-    b_free(base);
-
-    return value;
-}
-
-/**
- * Modulo in place
- * @param a - the value - will be reduced to the result
- * @param m - the modulo base
- */
-void b_modip(bignum_t *a, bignum_t m) {
-    bignum_t temp = (*a);
-    bignum_t res = b_mod((*a), m);
-    (*a) = res;
-    b_free(temp);
-}
-
-/**
  * Exponent function
  * @param b - base
  * @param e - exponent
  * @returns b^(e)
  */
 bignum_t b_exp(bignum_t b, bignum_t e) {
-    bignum_t zero = b_init(1);
-    bignum_t base = b_copy(b); base->sign = 0;
-    bignum_t exp = b_copy(e); exp->sign = 0;
+    bignum_t zero = b_initc(0);
+    bignum_t base = b_acopy(b);
+    bignum_t exp = b_acopy(e);
 
     // set our result to 1
-    bignum_t res = b_init(1);
-    b_oriip(res, 1);
+    bignum_t res = b_initc(1);
 
     int i = 0;
     while(b_comp(exp, zero) >= 1) {
@@ -742,62 +1072,6 @@ bignum_t b_exp(bignum_t b, bignum_t e) {
     return res;
 }
 
-/**
- * Modulo Exponent function
- * @param b - base
- * @param e - exponent
- * @param m - the modulo base
- * @returns b^(e) mod m
- */
-bignum_t b_mexp(bignum_t b, bignum_t e, bignum_t m) {
-
-    /**
-     * Using the property that (a * b) mod n = (a mod n) * (b mod n) mod n,
-     * we just mod everything before multiplication to keep the values down a bit
-     * otherwise it should be the exact same as regular exponentiation
-     */
-
-    bignum_t zero = b_init(1);
-    bignum_t base = b_mod(b, m); base->sign = 0;
-    bignum_t exp = b_copy(e); exp->sign = 0;
-
-
-    // set our result to 1
-    bignum_t res = b_init(1);
-    b_oriip(res, 1);
-
-    int i = 0;
-    while(b_comp(exp, zero) >= 1) {
-        if (b_andi(exp, 1)) {
-
-            bignum_t temp = res;
-
-            res = b_mul(res, base);
-
-            b_free(temp);
-            b_modip(&res, m);
-        }
-
-        // square it and mod m
-        bignum_t temp = base;
-        base = b_mul(base, base);
-        b_free(temp);
-        b_modip(&base, m);
-
-
-        i++;
-        b_rsip(exp, 1);
-    }
-
-
-    if (b->sign) res->sign = (b_andi(e, 1)) ? 1 : 0;
-
-    b_free(zero);
-    b_free(base);
-    b_free(exp);
-
-    return res;
-}
 
 int b_toi(bignum_t a) {
     if (a->size > 4) return (a->sign == 0) ? __INT32_MAX__ : -__INT32_MAX__;
@@ -832,11 +1106,11 @@ void b_prints(bignum_t a) {
 }
 
 char* b_tostr(bignum_t a) {
-    bignum_t zero = b_init(1);
-    if (b_comp(a, zero) == 0) return "0";
+    bignum_t zero = b_initc(0);
+    if (b_comp(a, zero) == 0) return " 0";
 
     bignum_t n = b_copy(a);
-    bignum_t ten = b_initv(10);
+    bignum_t ten = b_initc(10);
     bignum_t rem;
     int len = 0;
 
@@ -851,31 +1125,295 @@ char* b_tostr(bignum_t a) {
     b_free(n);
     n = b_copy(a);
 
-    char *str = malloc(sizeof(char) * (len + 1));
+    char *str = malloc(sizeof(char) * (len + 2));
+
+    int neg_flag = 0;
+
+    if (a->sign) {
+        str[0] = '-';
+    } else {
+        str[0] = ' ';
+    }
 
     for (int i = 0; i < len; i++) {
         bignum_t temp = n;
         n = b_div(n, ten, &rem);
         b_free(temp);
         if (b_toi(rem) >= 10) printf("aaaaaa %d\n", b_toi(rem));
-        str[len - 1 - i] = b_toi(rem) + '0';
+        str[len - i] = b_toi(rem) + '0';
         b_free(rem);
     }
-    str[len] = '\0';
+    str[len + 1] = '\0';
     b_free(zero); 
     b_free(ten); 
     b_free(n); 
     return str;
 }
 
+char* b_tohex(bignum_t a) {
+    bignum_t zero = b_initc(0);
+    if (b_comp(a, zero) == 0) return "0";
+
+    bignum_t n = b_copy(a);
+    bignum_t sixteen = b_initc(16);
+    bignum_t rem;
+    int len = 0;
+    char characters[16] = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
+
+    while (b_comp(n, zero) >= 1) {
+        len++;
+        bignum_t temp = n;
+        n = b_div(n, sixteen, &rem);
+        b_free(rem);
+        b_free(temp);
+    }
+
+    b_free(n);
+    n = b_copy(a);
+
+    char *str = malloc(sizeof(char) * (len + 1));
+
+    for (int i = 0; i < len; i++) {
+        bignum_t temp = n;
+        n = b_div(n, sixteen, &rem);
+        b_free(temp);
+        if (b_toi(rem) >= 16) printf("aaaaaa %d\n", b_toi(rem));
+        str[len - 1 - i] = characters[b_toi(rem)];
+        b_free(rem);
+    }
+    str[len] = '\0';
+    b_free(zero); 
+    b_free(sixteen); 
+    b_free(n); 
+    return str;
+}
+
+void printhex(char *str, unsigned int length) {
+    for (int i = length - 1; i >= 0; i--) printf("%02X", (unsigned char)str[i]);
+}
+
 int main(int argc, char** argv) {
 
-    printf("hello sir\n");
+    if (argc < 2) return -1;
 
-    bignum_t temp = b_init(1);
-    for (int i = 0; i < 10; i++) b_is_prime(temp);
-    b_free(temp);
-    return 0;
+    if (strcmp(argv[1], "encrypt") == 0) {
+
+        printf("Please enter a string: ");
+        char buffer[512];
+        int i = 0;
+        for (; (buffer[i]=getchar()) != '\n'; i++) ; ;
+        buffer[i] = '\0';
+
+        printf("inputted: %s\n", buffer);
+
+        unsigned int blocks;
+
+        char *cypher = encrypt(buffer, &blocks);
+        unsigned int length = 64;
+
+        bignum_t res = b_fromstr(cypher, length);
+
+        b_trim(res);
+
+        char *dec = decrypt(cypher, blocks);
+
+        unsigned int length_dec = strlength(dec);
+
+        bignum_t res2 = b_fromstr(dec, length_dec);
+
+        b_trim(res2);
+
+        printf("\ndecrypted string            : %s\n", b_tohex(res2));
+        printf("raw string                  : %s\n", res2->data);
+        printf("without bignum interference : %s\n", dec);
+
+        return 0;
+    }
+
+    if (strcasecmp(argv[1], "thex") == 0) {
+        printf("enter the decimal number: ");
+        long long a;
+        scanf("%lld", &a);
+
+        bignum_t res = b_initl(a);
+
+        b_print(res);
+        printf("hex: %s\n", b_tohex(res));
+
+
+        return 0;
+    }
+
+    if (strcmp(argv[1], "fhex") == 0) {
+        printf("Enter the hex string: ");
+        char *in = malloc(sizeof(char) * 128);
+        for (int i = 0; (in[i] = getchar()) != '\n'; i++) {
+            ; ;
+        }
+
+        printf("recieved: %s\n", in);
+
+        unsigned int text_length = 0;
+        for (int i = 0; in[i] != '\0'; i++) text_length++;
+
+        b_fromhex(in, text_length);
+        return 0;
+    }
+
+    if (strcmp(argv[1], "keygen") == 0) {
+        keygen();
+        return 0;
+    }
+
+    if (strcmp(argv[1], "mmi") == 0) {
+        long long a;
+        long long b;
+
+        printf("enter 2 nums: ");
+
+        scanf("%lld %lld", &a, &b);
+
+        bignum_t ba = b_initl(a);
+        bignum_t bb = b_initl(b);
+
+        bignum_t bres = b_mmi(ba, bb);
+
+        printf("mmi = %s\n", b_tostr(bres));
+        return 0;
+    }
+
+    if (strcmp(argv[1], "mul") == 0) {
+        printf("enter 2 nums: ");
+
+        long long a;
+        long long b;
+
+        scanf("%lld %lld", &a, &b);
+
+        bignum_t ba = b_initl(a);
+        bignum_t bb = b_initl(b);
+
+        bignum_t bres;
+        bignum_t fres;
+        long long res;
+
+        printf("multiplying...\n\n");
+
+        res = (a * b);
+
+        bres = b_mul(ba, bb);
+        fres = b_fftmul(ba, bb);
+
+        printf("ints: %lld\n", res);
+        printf("regular: %s\n", b_tostr(bres));
+        printf("fft: %s\n", b_tostr(fres));
+
+        return 0;
+    } else if (strcmp(argv[1], "multest") == 0) {
+
+        bignum_t ba = b_gen(32);
+        bignum_t bb = b_gen(32);
+
+        bignum_t bres;
+        bignum_t fres;
+        // long long res;
+
+        printf("multiplying...\n\n");
+
+        // res = (a * b);
+
+        bres = b_mul(ba, bb);
+        fres = b_fftmul(ba, bb);
+
+        // printf("ints: %lld\n", res);
+        printf("regular\t: %s\n", b_tostr(bres));
+        printf("fft    \t: %s\n", b_tostr(fres));
+
+        return 0;
+    }
+
+    if (strcmp(argv[1], "prime") == 0) {
+        bignum_t temp = NULL;
+        for (int i = 0; i < 1; i++) {
+            temp = b_gen_prime(BIT_LENGTH);
+            char *str = b_tohex(temp);
+            printf("%s\n\n", str);
+            free(str);
+            b_free(temp); temp = NULL;
+        }
+        b_free(temp);
+
+        printf("STATS\n");
+        printf("madd:\n\tcalls = %lld\n\ttime = %lf\n\tFOM = %lf\n", madd_calls, madd_time, (double)(madd_time * 1000000 / madd_calls));
+        printf("mmul:\n\tcalls = %lld\n\ttime = %lf\n\tFOM = %lf\n", mmul_calls, mmul_time, (double)(mmul_time * 1000000 / mmul_calls));
+        printf("modip:\n\tcalls = %lld\n\ttime = %lf\n\tFOM = %lf\n", modip_calls, modip_time, (double)(modip_time * 1000000 / modip_calls));
+        printf("subip:\n\tcalls = %lld\n\ttime = %lf\n\tFOM = %lf\n", subip_calls, subip_time, (double)(subip_time * 1000000 / subip_calls));
+        printf("msub:\n\tcalls = %lld\n\ttime = %lf\n\tFOM = %lf\n", msub_calls, msub_time, (double)(msub_time * 1000000 / msub_calls));
+        printf("mexp:\n\tcalls = %lld\n\ttime = %lf\n\tFOM = %lf\n", mexp_calls, mexp_time, (double)(mexp_time * 1000000 / mexp_calls));
+        printf("mlsip:\n\tcalls = %lld\n\ttime = %lf\n\tFOM = %lf\n", mlsip_calls, mlsip_time, (double)(mlsip_time * 1000000 / mlsip_calls));
+        printf("fftmul:\n\tcalls = %lld\n\ttime = %lf\n\tFOM = %lf\n", fftmul_calls, fftmul_time, (double)(fftmul_time * 1000000 / fftmul_calls));
+        return 0;
+    } else if (strcmp(argv[1], "mod") == 0) {
+        printf("enter command: ");
+
+        int a;
+        int b;
+        int m;
+        char op;
+
+        scanf("%d %c %d %d", &a, &op, &b, &m);
+
+        bignum_t ba = b_initv(a);
+        bignum_t bb = b_initv(b);
+        bignum_t bm = b_initv(m);
+
+        bignum_t bres;
+        int res;
+        int nmres = 0;
+
+        if (op == '+') {
+            printf("adding...\n\n");
+            nmres = (a + b);
+
+            bres = b_acopy(ba);
+            b_madd(bres, bb, bm);
+        } else if (op == '*') {
+            printf("multiplying...\n\n");
+
+            nmres = (a * b);
+
+            bres = b_acopy(ba);
+            b_mmul(bres, bb, bm);
+        } else if (op == '^') {
+            printf("exponentiating...\n\n");
+
+            nmres = (int)(pow(a, b));
+
+            bres = b_mexp(ba, bb, bm);
+        } else if (op == '-') {
+            printf("subtracting...\n\n");
+
+            nmres = (a - b);
+
+            bres = b_acopy(ba);
+            b_msub(bres, bb, bm);
+        } else if (op == '%') {
+            printf("moduloing...\n\n");
+
+            nmres = a;
+
+            bres = b_acopy(ba);
+            b_modip(bres, bm);
+        }
+
+        res = nmres % m;
+        printf("int result (no mod) = %d\n", nmres);
+        printf("int result = %d\n", res);
+        printf("bignum result = %s\n", b_tostr(bres));
+        return 0;
+    }
+
+    
 
     if (argc != 4) {
         fprintf(stderr, "usage: ./test <num1> <op> <num2>");
@@ -885,8 +1423,8 @@ int main(int argc, char** argv) {
     int a = atoi(argv[1]);
     int b = atoi(argv[3]);
 
-    bignum_t b_a = b_initv(a); b_trim(b_a);
-    bignum_t b_b = b_initv(b); b_trim(b_b);
+    bignum_t b_a = b_initv(a);
+    bignum_t b_b = b_initv(b);
 
     printf("inputted: %d %d\n", a, b);
     printf("hex: 0x%04X 0x%04X\n\n", a, b);
