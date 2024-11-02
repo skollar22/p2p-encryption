@@ -1,10 +1,6 @@
 #include "main.h"
 #include <unistd.h>
 
-#define PRIME_LENGTH 32
-#define KEY_LENGTH 64
-#define BLOCK_LEN 63
-
 void keygen() {
     // if (plaintext == NULL) return "";
     
@@ -42,14 +38,14 @@ void keygen() {
 
     printf("\n");
 
-    printf("p   = %s\n", b_tostr(p));
-    printf("pm  = %s\n", b_tostr(p_minus));
-    printf("q   = %s\n", b_tostr(q));
-    printf("qm  = %s\n", b_tostr(q_minus));
-    printf("pq  = %s\n", b_tostr(pq));
-    printf("pqm = %s\n", b_tostr(pq_minus));
-    printf("e   = %s\n", b_tostr(e));
-    printf("d   = %s\n", b_tostr(d));
+    // printf("p   = %s\n", b_tostr(p));
+    // printf("pm  = %s\n", b_tostr(p_minus));
+    // printf("q   = %s\n", b_tostr(q));
+    // printf("qm  = %s\n", b_tostr(q_minus));
+    // printf("pq  = %s\n", b_tostr(pq));
+    // printf("pqm = %s\n", b_tostr(pq_minus));
+    // printf("e   = %s\n", b_tostr(e));
+    // printf("d   = %s\n", b_tostr(d));
 
 
     FILE *pub = fopen("key.pub", "w");
@@ -61,38 +57,40 @@ void keygen() {
     fclose(pub);
     fclose(prv);
 
-    char message[12] = "hello there";
-
-    bignum_t bnmessage = b_fromstr(message, 12);
-
-    printf("created\n");
-
-    // segfault somewhere here
-
-    bignum_t cypher = b_mexp(bnmessage, e, pq);
-
-    printf("encrypted: %s\n", b_tostr(cypher));
-
-    bignum_t decode = b_mexp(cypher, d, pq);
-
-    printf("decrypted: ");
-
-    printf("%s\n", decode->data);
-
-    unsigned int blocks;
-
-    char * encrypted = encrypt(message, &blocks);
-
-    printf("cypher at %p\n", cypher);
-
-    // printf("in-house encrypt: %s\n", b_tohex(cypher));
-    // printf("encrypt function: %s\n", b_tohex(encrypted));
-
-    char *decrypted = decrypt(encrypted, blocks);
-
-    printf("decrypted: %s\n", decrypted);
-
     return;
+
+    // char message[12] = "hello there";
+
+    // bignum_t bnmessage = b_fromstr(message, 12);
+
+    // printf("created\n");
+
+    // // segfault somewhere here
+
+    // bignum_t cypher = b_mexp(bnmessage, e, pq);
+
+    // printf("encrypted: %s\n", b_tostr(cypher));
+
+    // bignum_t decode = b_mexp(cypher, d, pq);
+
+    // printf("decrypted: ");
+
+    // printf("%s\n", decode->data);
+
+    // unsigned int blocks;
+
+    // char * encrypted = encrypt(message, &blocks);
+
+    // printf("cypher at %p\n", cypher);
+
+    // // printf("in-house encrypt: %s\n", b_tohex(cypher));
+    // // printf("encrypt function: %s\n", b_tohex(encrypted));
+
+    // char *decrypted = decrypt(encrypted, blocks);
+
+    // printf("decrypted: %s\n", decrypted);
+
+    // return;
 
 }
 

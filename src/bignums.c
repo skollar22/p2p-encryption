@@ -1192,6 +1192,15 @@ void printhex(char *str, unsigned int length) {
     for (int i = length - 1; i >= 0; i--) printf("%02X", (unsigned char)str[i]);
 }
 
+unsigned char * hextochar(char *hexstr, unsigned int length) {
+    char *ret = malloc(sizeof(unsigned char) * length / 2 + 5);
+    for (int i = 0; i < length; i++) {
+        ret[(length - i - 1)/2] = num_from_hex(hexstr[i]) | (num_from_hex(hexstr[i - 1]) << 4);
+    }
+    ret[(length + 1)/2] = '\0';
+    return ret;
+}
+
 int main(int argc, char** argv) {
 
     if (argc < 2) return -1;
@@ -1204,33 +1213,55 @@ int main(int argc, char** argv) {
         for (; (buffer[i]=getchar()) != '\n'; i++) ; ;
         buffer[i] = '\0';
 
-        printf("inputted: %s\n", buffer);
-
         unsigned int blocks;
 
         char *cypher = encrypt(buffer, &blocks);
-        unsigned int length = 64;
 
-        bignum_t res = b_fromstr(cypher, length);
+        printf("Encrypted String: ");
+        printhex(cypher, blocks * KEY_LENGTH);
+        printf("\n");
 
-        b_trim(res);
+        // char *dec = decrypt(cypher, blocks);
 
-        char *dec = decrypt(cypher, blocks);
+        // unsigned int length_dec = strlength(dec);
+
+        // bignum_t res2 = b_fromstr(dec, length_dec);
+
+        // b_trim(res2);
+
+        // printf("\ndecrypted string            : %s\n", b_tohex(res2));
+        // printf("raw string                  : %s\n", res2->data);
+        // printf("without bignum interference : %s\n", dec);
+
+        return 0;
+    } else if (strcmp(argv[1], "decrypt") == 0) {
+
+        printf("Please enter a string: ");
+        char buffer[2048];
+        int i = 0;
+        for (; (buffer[i]=getchar()) != '\n'; i++) ; ;
+        buffer[i] = '\0';
+
+        unsigned int blocks = i / 128;
+
+        char *ciphertext = hextochar(buffer, i);
+
+        char *dec = decrypt(ciphertext, blocks);
 
         unsigned int length_dec = strlength(dec);
 
-        bignum_t res2 = b_fromstr(dec, length_dec);
+        // bignum_t res2 = b_fromstr(dec, length_dec);
 
-        b_trim(res2);
+        // b_trim(res2);
 
-        printf("\ndecrypted string            : %s\n", b_tohex(res2));
-        printf("raw string                  : %s\n", res2->data);
-        printf("without bignum interference : %s\n", dec);
+        // printf("\ndecrypted string            : %s\n", b_tohex(res2));
+        // printf("raw string                  : %s\n", res2->data);
+        printf("decrypted string : %s\n", dec);
 
         return 0;
     }
 
-    if (strcasecmp(argv[1], "thex") == 0) {
+    if (strcmp(argv[1], "thex") == 0) {
         printf("enter the decimal number: ");
         long long a;
         scanf("%lld", &a);

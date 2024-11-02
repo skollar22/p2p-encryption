@@ -3,5 +3,9 @@
 bin
 build
 
+# security
+key
+key.pub
+
 # workspace
 .vscode

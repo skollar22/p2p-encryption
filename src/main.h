@@ -1,8 +1,14 @@
+// for use on WSL
+#define _POSIX_C_SOURCE 200112L
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
 #include <sys/time.h>
+
+// net library??
+#include <netdb.h>
 
 // misc posix stuff
 #include <unistd.h>
@@ -16,9 +22,6 @@
 // sockets library
 #include <sys/socket.h>
 
-// net library??
-#include <netdb.h>
-
 #include <arpa/inet.h>
 
 #include <netinet/in.h>
@@ -30,6 +33,11 @@
 #define PORT "5678"
 
 #define BACKLOG 10
+
+// RSA
+#define PRIME_LENGTH 32
+#define KEY_LENGTH 64
+#define BLOCK_LEN 63
 
 
 extern double madd_time;
@@ -98,6 +106,7 @@ bignum_t b_copy(bignum_t a);
 bignum_t b_acopy(bignum_t a);
 bignum_t b_fromstr(char* str, unsigned int n);
 bignum_t b_fromhex(char *str, unsigned int n);
+unsigned char num_from_hex(unsigned char hexval);
 bignum_t b_minus(bignum_t a);
 bignum_t b_mmi(bignum_t a, bignum_t b);
 // bignum_t b_create_local_copy(bignum_t a);
