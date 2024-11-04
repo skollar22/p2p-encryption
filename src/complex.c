@@ -3,12 +3,7 @@
 #include <math.h>
 
 /**
- * So I've rethought the data structure
- * we basically want to have a struct that contains a list of complex values, then a complex values struct that contains
- * long double for the complex and the real parts
- * 
- * when we init this list of complex values, we malloc memory for the list itself, then for all the complex values within 
- * it, then for the stuff in the complex value
+ * Functions for the complex representation used in the FFT multiplication
  */
 
 bncplx_t c_construct(long double real, long double cplx) {

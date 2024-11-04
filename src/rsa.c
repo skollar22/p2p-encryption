@@ -1,6 +1,10 @@
 #include "main.h"
 #include <unistd.h>
 
+/**
+ * Key generation
+ * Keys are stored in key and key.pub in the folder that the program was run in
+ */
 void keygen() {
      // check if the key files exist
     if ((access("key", F_OK) == 0) && (access("key.pub", F_OK) == 0)) {
@@ -10,7 +14,7 @@ void keygen() {
         if (overwrite != 'y' && overwrite != 'Y') return;
     }
 
-    printf("working...");
+    printf("working...\n");
 
     // generate p and q
     bignum_t p = b_gen_prime(PRIME_LENGTH);
@@ -30,8 +34,6 @@ void keygen() {
     // find d
     bignum_t d = b_mmi(e, pq_minus);
 
-    printf("\n");
-
     FILE *pub = fopen("key.pub", "w");
     FILE *prv = fopen("key", "w");
 
@@ -44,12 +46,22 @@ void keygen() {
     return;
 }
 
+/**
+ * Gets the length of a string
+ * (I know there is a std library version, but I didn't trust it with my scuffed strings)
+ */
 unsigned int strlength(char *str) {
     unsigned int text_length = 0;
     for (int i = 0; str[i] != '\0'; i++) text_length++;
     return text_length;
 }
 
+/**
+ * Encrypt function
+ * @param plaintext - initial message as a string
+ * @param block_no - the number of blocks the message was broken into is stored in here
+ * @returns a list of unsigned char values that is the encrypted string
+ */
 char * encrypt(char * plaintext, unsigned int *block_no) {
 
     printf("\nencrypting...\n");
@@ -116,6 +128,12 @@ char * encrypt(char * plaintext, unsigned int *block_no) {
 
 }
 
+/**
+ * Encrypt block function
+ * @param plaintext - plaintext block as a string
+ * @param pq - the modulus for encryption
+ * @param e - public encryption exponent
+ */
 char * encryptb(char *plaintext, bignum_t pq, bignum_t e) {
 
     printf("encrypting block...\n");
@@ -140,6 +158,12 @@ char * encryptb(char *plaintext, bignum_t pq, bignum_t e) {
     return ret;
 }
 
+/**
+ * Decrypt function
+ * @param ciphertext - initial ciphertext as a string
+ * @param blocks - the number of blocks the message was broken into
+ * @returns the unencrypted message as a a string
+ */
 char * decrypt(char * ciphertext, unsigned int blocks) {
     printf("\ndecrypting...\n");
 
@@ -189,6 +213,12 @@ char * decrypt(char * ciphertext, unsigned int blocks) {
     return plaintext;
 }
 
+/**
+ * Decrypt block
+ * @param ciphertext - the ciphertext block to decrypt
+ * @param pq - the modulus for decryption
+ * @param d - the private decryption exponent
+ */
 char * decryptb(char *ciphertext, bignum_t pq, bignum_t d) {
 
     printf("decrypting block...\n");
@@ -200,11 +230,7 @@ char * decryptb(char *ciphertext, bignum_t pq, bignum_t d) {
 
     bignum_t bnmessage = b_fromstr(ciphertext, KEY_LENGTH);
 
-    // from here
-
     bignum_t plain = b_mexp(bnmessage, d, pq);
-
-    // b_pad(plain, BLOCK_LEN);
 
     b_free(bnmessage);
 

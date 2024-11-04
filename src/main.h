@@ -94,8 +94,6 @@ typedef struct bignum_comp_chain {
 // bignum functions
 
 // creation and deletion
-
-
 bignum_t b_gen(unsigned int size); // non-functional yet
 bignum_t b_init(unsigned int size);
 bignum_t b_initv(int initial);
@@ -109,8 +107,6 @@ bignum_t b_fromhex(char *str, unsigned int n);
 unsigned char num_from_hex(unsigned char hexval);
 bignum_t b_minus(bignum_t a);
 bignum_t b_mmi(bignum_t a, bignum_t b);
-// bignum_t b_create_local_copy(bignum_t a);
-// bignum_t b_create_local(unsigned int size);
 
 // utility
 unsigned int b_bytes(bignum_t a);
@@ -118,7 +114,6 @@ unsigned char b_msb(bignum_t a);
 unsigned int b_overflow(unsigned char a, unsigned char b, unsigned char carry);
 bignum_t b_largest(bignum_t a, bignum_t b);
 bignum_t b_smallest(bignum_t a, bignum_t b);
-unsigned int b_smallest_bytes(bignum_t a, bignum_t b);
 unsigned int b_largest_bytes(bignum_t a, bignum_t b);
 int b_comp(bignum_t a, bignum_t b);
 void b_print(bignum_t a);
@@ -203,12 +198,6 @@ char * decrypt(char *ciphertext, unsigned int blocks);
 char * decryptb(char *plaintext, bignum_t pq, bignum_t d);
 unsigned int strlength(char *str);
 
-
-
-
-
-
-
-
-
+// I/O functions
 void printhex(char *str, unsigned int length);
+unsigned char * hextochar(char *hexstr, unsigned int length);

@@ -12,20 +12,12 @@ void b_madd(bignum_t a, bignum_t b, bignum_t n) {
 
     madd_calls++;
 
-    // printf("\t\t\t\ta = %s\t", b_tostr(a));
-    // printf("b = %s\n", b_tostr(b));
-
     b_modip(a, n);
     b_modip(b, n);
-
-    // printf("\t\t\t\ta = %s\t", b_tostr(a));
-    // printf("b = %s\n", b_tostr(b));
 
     // we need to make sure there is enough room in a to store the result
     b_pad(a, b_bytes(n) + 1);
     b_pad(b, b_bytes(n) + 1);
-
-    // clock_t s = clock();
 
     // init variables for addition
     unsigned char carry = 0;
@@ -48,19 +40,9 @@ void b_madd(bignum_t a, bignum_t b, bignum_t n) {
         b_i = (unsigned int) b_byte;
         c_i = (unsigned int) carry;
 
-        // printf("\t\t\t\ti=%d: a=%d, b=%d, carry=%d ", i, a_byte, b_byte, carry);
-
         if (a_i + b_i + c_i > overflow_check) carry = 1;
-        else carry = 0;
-
-        // printf("next carry = %d (a_i=%d, b_i=%d, c_i=%d)\n", carry, a_i, b_i, c_i);
-        
+        else carry = 0;        
     }
-
-    // clock_t e = clock();
-
-    // madd_time += (double)(e - s) / CLOCKS_PER_SEC;
-
 
     b_modip(a, n);
 
@@ -98,10 +80,6 @@ void b_subip(bignum_t a, bignum_t b) {
         free(temp);
         return;
     }
-
-    // clock_t s = clock();
-
-    // from here, we know that a is the larger number
     
 
     // init variables for subtraction
@@ -123,10 +101,6 @@ void b_subip(bignum_t a, bignum_t b) {
             carry = 1;
         } else carry = 0;
     }
-
-    // clock_t e = clock();
-
-    // subip_time += (double)(e - s) / CLOCKS_PER_SEC;
 
     b_trim(b);
 }
@@ -174,8 +148,6 @@ void b_mlsip(bignum_t a, unsigned int shift, bignum_t n) {
 
     mlsip_calls++;
 
-    // clock_t s = clock();
-
     unsigned int oldSize = a->size;
     unsigned int bitsnum = a->size * 8 + shift;
     unsigned int bytesnum = bitsnum / 8 + 1;
@@ -204,10 +176,6 @@ void b_mlsip(bignum_t a, unsigned int shift, bignum_t n) {
         unsigned char temp = ~(0x01 << (i % 8));
         a->data[i / 8] &= temp;
     }
-
-    // clock_t e = clock();
-
-    // mlsip_time += (double)(e - s) / CLOCKS_PER_SEC;
 
     b_modip(a, n);
 
@@ -238,33 +206,16 @@ void b_mmul(bignum_t a, bignum_t b, bignum_t n) {
     // set a to zero
     b_subip(a, a);
 
-    // printf("\t\tlargest = %s, smallest = %s, a = %s\n", b_tostr(largest), b_tostr(smallest), b_tostr(a));
-
-    // printf("\t\tsmallest hex: %s\n", b_tohex(smallest));
-
-    // s = clock();
-
     int since_last_shift = 0;
 
     for (int i = 0; i < smallest->size; i++) {
         for (int j = 0; j < 8; j++) {
             if (smallest->data[i] & (1 << j)) {
-                // printf("\t\t\ti=%d, j=%d: shit just got real: shifting largest = %s by %d mod %s\n", i, j, b_tostr(largest), since_last_shift, b_tostr(n));
-                // ls the value we are adding one place
-
-                // e = clock();
-                // mmul_time += (double)(e - s) / CLOCKS_PER_SEC;
 
                 b_mlsip(largest, since_last_shift, n);
 
-                // printf("\t\t\tAdding largest = %s to a = %s mod %s\n", b_tostr(largest), b_tostr(a), b_tostr(n));
-
                 // add the shift
                 b_madd(a, largest, n);
-
-                // printf("\t\t\tnow a = %s\n", b_tostr(a));
-
-                // s = clock();
 
                 since_last_shift = 0;
             }
@@ -331,21 +282,11 @@ bignum_t b_mod(bignum_t a, bignum_t m) {
 void b_modip(bignum_t value, bignum_t base) {
 
     modip_calls++;
-    clock_t s;
-    clock_t e;
-
-    // bignum_t temp = (*a);
-    // bignum_t res = b_mod((*a), m);
-    // (*a) = res;
-    // b_free(temp);
 
     if (b_comp(value, base) < 0) {
         // if m is bigger than a already, return a
         return;
     }
-
-    s = clock();
-
 
     value->sign = 0;
     base->sign = 0;
@@ -368,19 +309,12 @@ void b_modip(bignum_t value, bignum_t base) {
 
         // if we can subtract the base from the value, do so
         if (b_comp(value, base) >= 0) {
-            // e = clock();
 
-            // modip_time += (double)(e - s) / CLOCKS_PER_SEC;
             b_subip(value, base);
-            // s = clock();
         }
     }
 
     b_trim(value);
-
-    e = clock();
-
-    modip_time += (double)(e - s) / CLOCKS_PER_SEC;
 }
 
 /**
@@ -391,10 +325,6 @@ void b_modip(bignum_t value, bignum_t base) {
  * @returns b^(e) mod m
  */
 bignum_t b_mexp(bignum_t b, bignum_t e, bignum_t m) {
-
-    // printf("b = %s\n", b_tostr(b));
-    // printf("e = %s\n", b_tostr(e));
-    // printf("m = %s\n", b_tostr(m));
 
     mexp_calls++;
     clock_t s = clock();
@@ -413,13 +343,7 @@ bignum_t b_mexp(bignum_t b, bignum_t e, bignum_t m) {
     // set our result to 1
     bignum_t res = b_initc(1);
 
-    // printf("mod = %s\n", b_tostr(m));
-
-    // printf("zero = %s, base = %s, exp = %s, res = %s\n", b_tostr(zero), b_tostr(base), b_tostr(exp), b_tostr(res));
-
     int i = 0;
-
-    // printf("\nmexp\n");
 
     bignum_t bc = b_acopy(base);
     bignum_t ec = b_acopy(exp);
@@ -428,71 +352,20 @@ bignum_t b_mexp(bignum_t b, bignum_t e, bignum_t m) {
     while(b_comp(exp, zero) >= 1) {
         // printf("\niteration %d:\n", i);
         if (b_andi(exp, 1)) {
-            // printf("doing\n");
-            // end = clock();
-            // printf("\tmod = %s\n", b_tostr(m));
-            // printf("\tmultiplying res = %s by base = %s:\n", b_tostr(res), b_tostr(base));
-
-            // mexp_time += (double)(end - s) / CLOCKS_PER_SEC;
-            // multiply by base mod m
-            
-
-            // bignum_t res2 = b_acopy(res);
-            // bignum_t resi = b_acopy(res);
-            // bignum_t base2 = b_acopy(base);
 
             bignum_t temp = res;
             res = b_fftmul(res, base);
             // b_mmul(temp, temp, m);
             b_free(temp);
 
-            // temp = res;
-            // res = b_mul(res, base);
-            // b_free(temp);
-
-            // if (b_comp(res, res2) != 0) {
-            //     printf("ok wtf\n");
-
-            //     printf("m           = %s\n", b_tostr(m));
-
-            //     printf("normal      = %s\n", b_tostr(res));
-            //     b_print(res);
-            //     printf("fft         = %s\n", b_tostr(res2));
-            //     b_print(res2);
-
-            //     printf("initial res = %s\n", b_tostr(resi));
-            //     printf("normal base = %s\n", b_tostr(base));
-            //     printf("fft base    = %s\n", b_tostr(base2));
-
-
-            //     printf("initial base     = %s\n", b_tostr(bc));
-            //     printf("initial exponent = %s\n", b_tostr(ec));
-            //     printf("initial modulus  = %s\n", b_tostr(mc));
-            //     exit(1);
-            // }
-
             b_modip(res, m);
-
-            // b_free(base2);
-            // b_free(res2);
-            // b_free(resi);
-
-            // printf("\tnew res = %s\n", b_tostr(res));
-            // s = clock();
         }
-        // end = clock();
-
-        // mexp_time += (double)(end - s) / CLOCKS_PER_SEC;
         // square base mod m
         bignum_t temp = base;
         base = b_fftmul(base, base);
         b_modip(base, m);
         // b_mmul(temp, temp, m);
         b_free(temp);
-
-        // printf("new base = %s\n", b_tostr(base));
-
-        // s = clock();
 
         // move the exponent down
         b_rsip(exp, 1);

@@ -6,6 +6,9 @@
 #define EVEN 0
 #define ODD 1
 
+/**
+ * FFT multiplication function
+ */
 bignum_t b_fftmul(bignum_t a, bignum_t b) {
 
     fftmul_calls++;

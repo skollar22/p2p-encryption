@@ -2,7 +2,7 @@
 CC          := gcc
 
 #The Target Binary Program
-TARGET      := p2pchat
+TARGET      := bn
 
 #The Directories, Source, Includes, Objects, Binary and Resources
 SRCDIR      := src
