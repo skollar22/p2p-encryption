@@ -86,6 +86,8 @@ bignum_t b_gen_prime(unsigned int size) {
 
         i++;
 
+        // printf("%d\n", i);
+
         b_addip(composite, two);
         b_free(potential_prime);
         potential_prime = b_ori(composite, 1);
@@ -112,9 +114,7 @@ int b_is_prime(bignum_t n, bignum_t n_minus) {
 
     // Fermat test
     bignum_t fermat_a = b_gen(1);
-
     bignum_t res = b_mexp(fermat_a, n_minus, n);
-    // printf("%s\n", b_tostr(res));
 
     if (b_comp(res, one) != 0) return 0;
 
@@ -122,13 +122,8 @@ int b_is_prime(bignum_t n, bignum_t n_minus) {
     b_free(res);        res = NULL;
 
 
-    // printf("fermat approved! %s\n", b_tostr(n));
-
-
     // Miller-Rabin test
     bignum_t mr_num = b_copy(n_minus);
-
-    // printf("n-minus        :\t%s\n", b_tostr(mr_num));
 
     int s = 0;
     unsigned char mask = 0x01;
@@ -137,15 +132,11 @@ int b_is_prime(bignum_t n, bignum_t n_minus) {
         b_rsip(mr_num, 1);
     }
 
-    // printf("d              :\t%s\n", b_tostr(mr_num));
-    // printf("s              :\t%d\n", s);
-
-
     bignum_t mr_a = NULL;
     bignum_t mr_x = NULL;
     bignum_t mr_y = NULL;
 
-    for (int i = 0; i < 20; i++) {
+    for (int i = 0; i < 10; i++) {
 
 
         b_free(mr_a);
@@ -153,32 +144,32 @@ int b_is_prime(bignum_t n, bignum_t n_minus) {
 
         mr_a = b_gen(BIT_LENGTH);
 
-        // printf("a              :\t%s\n", b_tostr(mr_a));
-
         mr_x = b_mexp(mr_a, mr_num, n);
 
-        int passed = 0;
+        // squaring 1 or -1 will only result in 1
+        if ((b_comp(mr_x, one) == 0) || (b_comp(mr_x, n_minus) == 0)) {
+            continue;
+        }
 
-        for (int j = 0; j < s; j++) {
-
-            // printf("x              :\t%s\tfor r = %d\n", b_tostr(mr_x), j);
-
-            if ((b_comp(mr_x, one) == 0) || (b_comp(mr_x, n_minus) == 0)) {
-                passed = 1;
-            }
+        for (int j = 0; j < s - 1; j++) {
             mr_y = b_fftmul(mr_x, mr_x);
             b_modip(mr_y, n);
             bignum_t temp = mr_x;
             mr_x = mr_y;
-            // b_mmul(temp, temp, n);
             b_free(temp);
+
+            // we know the previous root was not 1 or -1, so we have found a different sqrt of 1
+            if (b_comp(mr_x, one) == 0) {
+                return 0;
+            }
+
+            // squaring -1 will just give us 1
+            if (b_comp(mr_x, n_minus) == 0) {
+                continue;
+            }
         }
 
-        // printf("x              :\t%s\tfor x=n-1\n\n", b_tostr(mr_x));
-
-        if (!passed) return 0;
-
-        if (b_comp(mr_x, one) != 0) return 0;
+        return 0;
     }
 
     return 1;
@@ -702,7 +693,6 @@ bignum_t b_sub(bignum_t a, bignum_t b) {
     }
 
     if (largest == b) {
-        printf("reverseing\n");
         // subtracting a bigger number
         // can do this by recalling fn with args swapped, then make neg
         bignum_t res = b_sub(b, a);
@@ -1375,13 +1365,13 @@ int main(int argc, char** argv) {
         b_free(temp);
 
         printf("STATS\n");
-        printf("madd:\n\tcalls = %lld\n\ttime = %lf\n\tFOM = %lf\n", madd_calls, madd_time, (double)(madd_time * 1000000 / madd_calls));
+        // printf("madd:\n\tcalls = %lld\n\ttime = %lf\n\tFOM = %lf\n", madd_calls, madd_time, (double)(madd_time * 1000000 / madd_calls));
         printf("mmul:\n\tcalls = %lld\n\ttime = %lf\n\tFOM = %lf\n", mmul_calls, mmul_time, (double)(mmul_time * 1000000 / mmul_calls));
         printf("modip:\n\tcalls = %lld\n\ttime = %lf\n\tFOM = %lf\n", modip_calls, modip_time, (double)(modip_time * 1000000 / modip_calls));
-        printf("subip:\n\tcalls = %lld\n\ttime = %lf\n\tFOM = %lf\n", subip_calls, subip_time, (double)(subip_time * 1000000 / subip_calls));
-        printf("msub:\n\tcalls = %lld\n\ttime = %lf\n\tFOM = %lf\n", msub_calls, msub_time, (double)(msub_time * 1000000 / msub_calls));
-        printf("mexp:\n\tcalls = %lld\n\ttime = %lf\n\tFOM = %lf\n", mexp_calls, mexp_time, (double)(mexp_time * 1000000 / mexp_calls));
-        printf("mlsip:\n\tcalls = %lld\n\ttime = %lf\n\tFOM = %lf\n", mlsip_calls, mlsip_time, (double)(mlsip_time * 1000000 / mlsip_calls));
+        // printf("subip:\n\tcalls = %lld\n\ttime = %lf\n\tFOM = %lf\n", subip_calls, subip_time, (double)(subip_time * 1000000 / subip_calls));
+        // printf("msub:\n\tcalls = %lld\n\ttime = %lf\n\tFOM = %lf\n", msub_calls, msub_time, (double)(msub_time * 1000000 / msub_calls));
+        // printf("mexp:\n\tcalls = %lld\n\ttime = %lf\n\tFOM = %lf\n", mexp_calls, mexp_time, (double)(mexp_time * 1000000 / mexp_calls));
+        // printf("mlsip:\n\tcalls = %lld\n\ttime = %lf\n\tFOM = %lf\n", mlsip_calls, mlsip_time, (double)(mlsip_time * 1000000 / mlsip_calls));
         printf("fftmul:\n\tcalls = %lld\n\ttime = %lf\n\tFOM = %lf\n", fftmul_calls, fftmul_time, (double)(fftmul_time * 1000000 / fftmul_calls));
         return 0;
     } else if (strcmp(argv[1], "mod") == 0) {

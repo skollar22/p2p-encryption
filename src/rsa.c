@@ -2,12 +2,6 @@
 #include <unistd.h>
 
 void keygen() {
-    // if (plaintext == NULL) return "";
-    
-    // // find the size of the text (in bytes)
-    // unsigned int text_length = 0;
-    // for (int i = 0; plaintext[i] != '\0'; i++) text_length++;
-
      // check if the key files exist
     if ((access("key", F_OK) == 0) && (access("key.pub", F_OK) == 0)) {
         printf("Keys already exist in this directory. Overwrite? [y/n]: ");
@@ -38,16 +32,6 @@ void keygen() {
 
     printf("\n");
 
-    // printf("p   = %s\n", b_tostr(p));
-    // printf("pm  = %s\n", b_tostr(p_minus));
-    // printf("q   = %s\n", b_tostr(q));
-    // printf("qm  = %s\n", b_tostr(q_minus));
-    // printf("pq  = %s\n", b_tostr(pq));
-    // printf("pqm = %s\n", b_tostr(pq_minus));
-    // printf("e   = %s\n", b_tostr(e));
-    // printf("d   = %s\n", b_tostr(d));
-
-
     FILE *pub = fopen("key.pub", "w");
     FILE *prv = fopen("key", "w");
 
@@ -58,40 +42,6 @@ void keygen() {
     fclose(prv);
 
     return;
-
-    // char message[12] = "hello there";
-
-    // bignum_t bnmessage = b_fromstr(message, 12);
-
-    // printf("created\n");
-
-    // // segfault somewhere here
-
-    // bignum_t cypher = b_mexp(bnmessage, e, pq);
-
-    // printf("encrypted: %s\n", b_tostr(cypher));
-
-    // bignum_t decode = b_mexp(cypher, d, pq);
-
-    // printf("decrypted: ");
-
-    // printf("%s\n", decode->data);
-
-    // unsigned int blocks;
-
-    // char * encrypted = encrypt(message, &blocks);
-
-    // printf("cypher at %p\n", cypher);
-
-    // // printf("in-house encrypt: %s\n", b_tohex(cypher));
-    // // printf("encrypt function: %s\n", b_tohex(encrypted));
-
-    // char *decrypted = decrypt(encrypted, blocks);
-
-    // printf("decrypted: %s\n", decrypted);
-
-    // return;
-
 }
 
 unsigned int strlength(char *str) {
@@ -180,13 +130,11 @@ char * encryptb(char *plaintext, bignum_t pq, bignum_t e) {
 
     bignum_t bnmessage = b_fromstr(plaintext, text_length);
 
-    // from here
-
     bignum_t cypher = b_mexp(bnmessage, e, pq);
 
     b_free(bnmessage);
 
-    // return cypher;
+    // return cyphertext
     char *ret = cypher->data;
     free(cypher);
     return ret;
